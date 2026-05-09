@@ -1,5 +1,7 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import { Beaker, ClipboardCheck, PackageCheck, UsersRound } from 'lucide-react';
+import { useState } from 'react';
+import { TpnOrderDialog } from '@/pages/tpn/orders/components/tpn-order-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -67,6 +69,8 @@ export default function Dashboard({
     stats = emptyStats,
     recentPatients = [],
 }: DashboardProps) {
+    const [orderDialogOpen, setOrderDialogOpen] = useState(false);
+
     return (
         <>
             <Head title="Dashboard" />
@@ -84,21 +88,10 @@ export default function Dashboard({
 
                     <div className="flex gap-3">
                         <Button
-                            variant="outline"
-                            className="border-slate-300 bg-white text-slate-800 hover:bg-slate-50"
-                            asChild
-                        >
-                            <Link href="/patients" prefetch>
-                                View Registry
-                            </Link>
-                        </Button>
-                        <Button
                             className="bg-[#2f7d32] text-white hover:bg-[#27692a]"
-                            asChild
+                            onClick={() => setOrderDialogOpen(true)}
                         >
-                            <Link href="/tpn/orders/create" prefetch>
-                                New TPN Order
-                            </Link>
+                            New TPN Order
                         </Button>
                     </div>
                 </div>
@@ -204,6 +197,11 @@ export default function Dashboard({
                     </CardContent>
                 </Card>
             </div>
+
+            <TpnOrderDialog
+                open={orderDialogOpen}
+                onOpenChange={setOrderDialogOpen}
+            />
         </>
     );
 }
