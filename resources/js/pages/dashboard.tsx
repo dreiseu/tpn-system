@@ -1,7 +1,7 @@
 import { Head } from '@inertiajs/react';
 import { Beaker, ClipboardCheck, PackageCheck, UsersRound } from 'lucide-react';
 import { useState } from 'react';
-import { TpnOrderDialog } from '@/pages/tpn/orders/components/tpn-order-dialog';
+import { OrderRegistrationDialog } from '@/components/orders/order-registration-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -198,7 +198,7 @@ export default function Dashboard({
                 </Card>
             </div>
 
-            <TpnOrderDialog
+            <OrderRegistrationDialog
                 open={orderDialogOpen}
                 onOpenChange={setOrderDialogOpen}
             />

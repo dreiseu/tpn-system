@@ -26,10 +26,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import {
-    TpnOrderDialog,
-    type TpnOrderFormData,
-} from '@/pages/tpn/orders/components/tpn-order-dialog';
+import { OrderRegistrationDialog } from '@/components/orders/order-registration-dialog';
 import {
     getPatientName,
     getStatusClass,
@@ -37,10 +34,15 @@ import {
     statusOptions,
     type TpnOrder,
     type TpnOrderStatus,
-} from '@/pages/tpn/orders/data';
+} from '@/types/orders';
 
-export default function TpnOrdersIndex() {
-    const [orders, setOrders] = useState<TpnOrder[]>(initialOrders);
+type OrdersIndexProps = {
+    orders?: TpnOrder[];
+};
+
+export default function OrdersIndex({
+    orders = initialOrders,
+}: OrdersIndexProps) {
     const [query, setQuery] = useState('');
     const [status, setStatus] = useState<TpnOrderStatus | 'All'>('All');
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -73,58 +75,15 @@ export default function TpnOrdersIndex() {
     }
 
     function handleEdit(order: TpnOrder) {
-        setEditingOrder(order);
-        setDialogOpen(true);
+        window.alert(
+            `Edit is not connected to the database yet for ${order.order_no} (${getPatientName(order)}).`,
+        );
     }
 
     function handleDelete(order: TpnOrder) {
-        const confirmed = window.confirm(
-            `Delete ${order.order_no} for ${getPatientName(order)}?`,
+        window.alert(
+            `Delete is not connected to the database yet for ${order.order_no} (${getPatientName(order)}).`,
         );
-
-        if (!confirmed) {
-            return;
-        }
-
-        setOrders((currentOrders) =>
-            currentOrders.filter((item) => item.id !== order.id),
-        );
-    }
-
-    function handleSubmit(data: TpnOrderFormData) {
-        if (editingOrder) {
-            setOrders((currentOrders) =>
-                currentOrders.map((order) =>
-                    order.id === editingOrder.id
-                        ? {
-                              ...order,
-                              ...data,
-                          }
-                        : order,
-                ),
-            );
-            return;
-        }
-
-        const nextId =
-            orders.reduce((maxId, order) => Math.max(maxId, order.id), 0) + 1;
-
-        setOrders((currentOrders) => [
-            {
-                ...data,
-                id: nextId,
-                order_no: `TPN-2026-${String(nextId).padStart(4, '0')}`,
-                order_date: new Intl.DateTimeFormat('en-PH', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                }).format(new Date()),
-                status: 'Draft',
-            },
-            ...currentOrders,
-        ]);
     }
 
     return (
@@ -247,7 +206,7 @@ export default function TpnOrdersIndex() {
                                         >
                                             <td className="py-4 pr-5 font-medium text-slate-900">
                                                 <Link
-                                                    href={`/tpn/orders/${order.id}`}
+                                                    href={`/orders/${order.id}`}
                                                     className="font-medium text-slate-900 hover:text-[#2f7d32] hover:underline"
                                                 >
                                                     {order.order_no}
@@ -255,7 +214,7 @@ export default function TpnOrdersIndex() {
                                             </td>
                                             <td className="px-5 py-4">
                                                 <Link
-                                                    href={`/tpn/orders/${order.id}`}
+                                                    href={`/orders/${order.id}`}
                                                     className="font-medium text-slate-900 hover:text-[#2f7d32] hover:underline"
                                                 >
                                                     {getPatientName(order) ||
@@ -338,23 +297,24 @@ export default function TpnOrdersIndex() {
                 </Card>
             </div>
 
-            <TpnOrderDialog
+            <OrderRegistrationDialog
                 open={dialogOpen}
                 onOpenChange={setDialogOpen}
                 initialData={editingOrder ?? undefined}
                 title={editingOrder ? 'Edit TPN Order' : 'New TPN Order'}
-                submitLabel={editingOrder ? 'Save Changes' : 'Save Draft'}
-                onSubmit={handleSubmit}
+                submitLabel={
+                    editingOrder ? 'Save Changes' : 'Submit for Review'
+                }
             />
         </>
     );
 }
 
-TpnOrdersIndex.layout = {
+OrdersIndex.layout = {
     breadcrumbs: [
         {
             title: 'TPN Orders',
-            href: '/tpn/orders',
+            href: '/orders',
         },
     ],
 };

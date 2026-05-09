@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\TpnOrderController;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 
@@ -10,11 +11,20 @@ Route::inertia('/', 'welcome', [
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'dashboard')->name('dashboard');
 
-    Route::inertia('tpn/orders', 'tpn/orders/index')
-        ->name('tpn.orders.index');
+    Route::get('orders', [TpnOrderController::class, 'index'])
+        ->name('orders.index');
 
-    Route::inertia('tpn/orders/{order}', 'tpn/orders/show')
-        ->name('tpn.orders.show');
+    Route::inertia('orders/register', 'orders/register')
+        ->name('orders.register');
+
+    Route::post('orders', [TpnOrderController::class, 'store'])
+        ->name('orders.store');
+
+    Route::get('orders/{order}', [TpnOrderController::class, 'show'])
+        ->name('orders.show');
+
+    Route::get('orders/{order}/edit', [TpnOrderController::class, 'edit'])
+        ->name('orders.edit');
 });
 
-require __DIR__.'/settings.php';
+require __DIR__ . '/settings.php';

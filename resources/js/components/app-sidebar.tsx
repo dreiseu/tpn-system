@@ -18,7 +18,7 @@ const mainNavItems: NavItem[] = [
     },
     {
         title: 'TPN Orders',
-        href: '/tpn/orders',
+        href: '/orders',
         icon: ClipboardCheck,
     },
 ];
