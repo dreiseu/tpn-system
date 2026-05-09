@@ -1,4 +1,4 @@
-import { LayoutGrid, Search } from 'lucide-react';
+import { ClipboardCheck, LayoutGrid, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { NavMain } from '@/components/nav-main';
 import {
@@ -15,6 +15,11 @@ const mainNavItems: NavItem[] = [
         title: 'Dashboard',
         href: dashboard(),
         icon: LayoutGrid,
+    },
+    {
+        title: 'TPN Orders',
+        href: '/tpn/orders',
+        icon: ClipboardCheck,
     },
 ];
 

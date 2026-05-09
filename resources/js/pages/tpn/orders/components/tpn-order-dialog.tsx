@@ -1,4 +1,10 @@
-import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import {
+    useEffect,
+    useMemo,
+    useState,
+    type CSSProperties,
+    type ReactNode,
+} from 'react';
 import { Save } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -31,9 +37,22 @@ import { Textarea } from '@/components/ui/textarea';
 type TpnOrderDialogProps = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    initialData?: Partial<TpnOrderFormData>;
+    title?: string;
+    description?: string;
+    submitLabel?: string;
+    onSubmit?: (data: TpnOrderFormData) => void;
 };
 
-export function TpnOrderDialog({ open, onOpenChange }: TpnOrderDialogProps) {
+export function TpnOrderDialog({
+    open,
+    onOpenChange,
+    initialData,
+    title = 'New TPN Order',
+    description = 'Create a parenteral nutrition request for pharmacist review, formulation, compounding, and dispensing.',
+    submitLabel = 'Submit for Review',
+    onSubmit,
+}: TpnOrderDialogProps) {
     const [data, setData] = useState<TpnOrderFormData>(initialFormData);
 
     const computedWeightKg = useMemo(() => {
@@ -69,6 +88,22 @@ export function TpnOrderDialog({ open, onOpenChange }: TpnOrderDialogProps) {
         onOpenChange(nextOpen);
     }
 
+    function handleSubmit() {
+        onSubmit?.(data);
+        onOpenChange(false);
+    }
+
+    useEffect(() => {
+        if (!open) {
+            return;
+        }
+
+        setData({
+            ...initialFormData,
+            ...initialData,
+        });
+    }, [initialData, open]);
+
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogContent
@@ -87,13 +122,10 @@ export function TpnOrderDialog({ open, onOpenChange }: TpnOrderDialogProps) {
             >
                 <DialogHeader className="shrink-0 border-b border-border bg-background px-6 py-4 text-left">
                     <DialogTitle className="text-xl font-semibold">
-                        New TPN Order
+                        {title}
                     </DialogTitle>
 
-                    <DialogDescription>
-                        Create a parenteral nutrition request for pharmacist
-                        review, formulation, compounding, and dispensing.
-                    </DialogDescription>
+                    <DialogDescription>{description}</DialogDescription>
                 </DialogHeader>
 
                 <div
@@ -140,9 +172,9 @@ export function TpnOrderDialog({ open, onOpenChange }: TpnOrderDialogProps) {
                             Cancel
                         </Button>
 
-                        <Button>
+                        <Button onClick={handleSubmit}>
                             <Save className="mr-2 h-4 w-4" />
-                            Submit for Review
+                            {submitLabel}
                         </Button>
                     </div>
                 </div>
@@ -151,7 +183,7 @@ export function TpnOrderDialog({ open, onOpenChange }: TpnOrderDialogProps) {
     );
 }
 
-type TpnOrderFormData = {
+export type TpnOrderFormData = {
     temporary_request: boolean;
     last_name: string;
     first_name: string;
@@ -1045,7 +1077,7 @@ function ReviewRow({ label, value }: { label: string; value: string }) {
                 {label}
             </span>
             <span className="text-right text-sm font-medium text-foreground">
-                {value || '—'}
+                {value || 'N/A'}
             </span>
         </div>
     );

@@ -1,13 +1,13 @@
 import { Head, Link } from '@inertiajs/react';
 import {
-    Beaker,
-    ClipboardCheck,
+    ClipboardList,
     Filter,
-    PackageCheck,
+    Pencil,
     Plus,
     Search,
-    UsersRound,
+    Trash2,
 } from 'lucide-react';
+import { useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,285 +26,326 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-
-type TpnOrderStatus =
-    | 'Draft'
-    | 'Pending Review'
-    | 'Approved'
-    | 'For Compounding'
-    | 'For Dispensing'
-    | 'Completed';
-
-type TpnOrder = {
-    id: number;
-    order_no: string;
-    hospital_no: string;
-    patient_name: string;
-    case_no: string;
-    location: string;
-    order_date: string;
-    status: TpnOrderStatus;
-};
-
-const summaryCards = [
-    {
-        title: 'Active TPN Patients',
-        value: 18,
-        description: 'Patients currently monitored for nutrition support',
-        icon: UsersRound,
-    },
-    {
-        title: 'Pending Review',
-        value: 6,
-        description: 'Orders waiting for pharmacist validation',
-        icon: ClipboardCheck,
-    },
-    {
-        title: 'For Compounding',
-        value: 4,
-        description: 'Approved formulas queued for preparation',
-        icon: Beaker,
-    },
-    {
-        title: 'For Dispensing',
-        value: 3,
-        description: 'Prepared TPN bags pending release',
-        icon: PackageCheck,
-    },
-];
-
-const orders: TpnOrder[] = [
-    {
-        id: 1,
-        order_no: 'TPN-2026-0001',
-        hospital_no: 'HN-000124',
-        patient_name: 'Juan Dela Cruz',
-        case_no: 'CSNUM20260000001',
-        location: 'NICU / Room 201 / Bed 03',
-        order_date: 'May 9, 2026 08:30 AM',
-        status: 'Pending Review',
-    },
-    {
-        id: 2,
-        order_no: 'TPN-2026-0002',
-        hospital_no: 'HN-000221',
-        patient_name: 'Maria Santos',
-        case_no: 'CSNUM20260000002',
-        location: 'ICU / Room 104 / Bed 01',
-        order_date: 'May 9, 2026 09:15 AM',
-        status: 'For Compounding',
-    },
-    {
-        id: 3,
-        order_no: 'TPN-2026-0003',
-        hospital_no: 'HN-000358',
-        patient_name: 'Pedro Reyes',
-        case_no: 'CSNUM20260000003',
-        location: 'Pedia / Room 305 / Bed 02',
-        order_date: 'May 8, 2026 02:20 PM',
-        status: 'For Dispensing',
-    },
-];
-
-function getStatusClass(status: TpnOrderStatus) {
-    switch (status) {
-        case 'Draft':
-            return 'border-muted-foreground/30 bg-muted text-muted-foreground';
-        case 'Pending Review':
-            return 'border-yellow-500/30 bg-yellow-50 text-yellow-700';
-        case 'Approved':
-            return 'border-blue-500/30 bg-blue-50 text-blue-700';
-        case 'For Compounding':
-            return 'border-purple-500/30 bg-purple-50 text-purple-700';
-        case 'For Dispensing':
-            return 'border-emerald-500/30 bg-emerald-50 text-emerald-700';
-        case 'Completed':
-            return 'border-green-500/30 bg-green-50 text-green-700';
-        default:
-            return 'border-muted-foreground/30 bg-muted text-muted-foreground';
-    }
-}
+import {
+    TpnOrderDialog,
+    type TpnOrderFormData,
+} from '@/pages/tpn/orders/components/tpn-order-dialog';
+import {
+    getPatientName,
+    getStatusClass,
+    initialOrders,
+    statusOptions,
+    type TpnOrder,
+    type TpnOrderStatus,
+} from '@/pages/tpn/orders/data';
 
 export default function TpnOrdersIndex() {
+    const [orders, setOrders] = useState<TpnOrder[]>(initialOrders);
+    const [query, setQuery] = useState('');
+    const [status, setStatus] = useState<TpnOrderStatus | 'All'>('All');
+    const [dialogOpen, setDialogOpen] = useState(false);
+    const [editingOrder, setEditingOrder] = useState<TpnOrder | null>(null);
+
+    const filteredOrders = useMemo(() => {
+        const normalizedQuery = query.trim().toLowerCase();
+
+        return orders.filter((order) => {
+            const matchesStatus = status === 'All' || order.status === status;
+            const searchable = [
+                order.order_no,
+                order.hospital_number,
+                getPatientName(order),
+                order.ward,
+                order.room,
+                order.prescribing_physician,
+                order.status,
+            ]
+                .join(' ')
+                .toLowerCase();
+
+            return matchesStatus && searchable.includes(normalizedQuery);
+        });
+    }, [orders, query, status]);
+
+    function handleCreate() {
+        setEditingOrder(null);
+        setDialogOpen(true);
+    }
+
+    function handleEdit(order: TpnOrder) {
+        setEditingOrder(order);
+        setDialogOpen(true);
+    }
+
+    function handleDelete(order: TpnOrder) {
+        const confirmed = window.confirm(
+            `Delete ${order.order_no} for ${getPatientName(order)}?`,
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        setOrders((currentOrders) =>
+            currentOrders.filter((item) => item.id !== order.id),
+        );
+    }
+
+    function handleSubmit(data: TpnOrderFormData) {
+        if (editingOrder) {
+            setOrders((currentOrders) =>
+                currentOrders.map((order) =>
+                    order.id === editingOrder.id
+                        ? {
+                              ...order,
+                              ...data,
+                          }
+                        : order,
+                ),
+            );
+            return;
+        }
+
+        const nextId =
+            orders.reduce((maxId, order) => Math.max(maxId, order.id), 0) + 1;
+
+        setOrders((currentOrders) => [
+            {
+                ...data,
+                id: nextId,
+                order_no: `TPN-2026-${String(nextId).padStart(4, '0')}`,
+                order_date: new Intl.DateTimeFormat('en-PH', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                }).format(new Date()),
+                status: 'Draft',
+            },
+            ...currentOrders,
+        ]);
+    }
+
     return (
         <>
             <Head title="TPN Orders" />
 
-            <div className="flex flex-col gap-6">
-                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="emr-content-surface flex flex-1 flex-col gap-6 p-4 md:p-6">
+                <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                     <div>
-                        <h1 className="text-2xl font-semibold tracking-tight">
+                        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
                             TPN Orders
                         </h1>
-                        <p className="text-sm text-muted-foreground">
-                            Manage parenteral nutrition requests, formulation
-                            review, compounding, and dispensing workflow.
+                        <p className="text-sm text-slate-500">
+                            Search and review parenteral nutrition orders before
+                            formulation, compounding, and dispensing.
                         </p>
                     </div>
 
-                    <Button asChild>
-                        <Link href="/tpn/orders/create">
-                            <Plus className="mr-2 h-4 w-4" />
-                            New TPN Order
-                        </Link>
+                    <Button
+                        className="bg-[#2f7d32] text-white hover:bg-[#27692a]"
+                        onClick={handleCreate}
+                    >
+                        <Plus className="mr-2 h-4 w-4" />
+                        New TPN Order
                     </Button>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                    {summaryCards.map((card) => {
-                        const Icon = card.icon;
-
-                        return (
-                            <Card key={card.title}>
-                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardTitle className="text-sm font-medium">
-                                        {card.title}
-                                    </CardTitle>
-                                    <Icon className="h-4 w-4 text-muted-foreground" />
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-2xl font-bold">
-                                        {card.value}
-                                    </div>
-                                    <p className="text-xs text-muted-foreground">
-                                        {card.description}
-                                    </p>
-                                </CardContent>
-                            </Card>
-                        );
-                    })}
-                </div>
-
-                <Card>
-                    <CardHeader className="gap-3">
+                <Card className="rounded-lg border-slate-200 bg-white shadow-sm">
+                    <CardHeader className="gap-4">
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                             <div>
-                                <CardTitle>TPN Order Registry</CardTitle>
-                                <CardDescription>
-                                    Static layout preview for the initial TPN
-                                    order workflow.
+                                <CardTitle className="flex items-center gap-2 pb-2 text-slate-900">
+                                    <ClipboardList className="h-5 w-5 text-[#2f7d32]" />
+                                    TPN Order Directory
+                                </CardTitle>
+                                <CardDescription className="text-slate-500">
+                                    {filteredOrders.length} orders available for
+                                    lookup.
                                 </CardDescription>
                             </div>
 
-                            <div className="flex flex-col gap-2 sm:flex-row">
+                            <div className="flex flex-col gap-2 pb-4 sm:flex-row">
                                 <div className="relative">
-                                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                    <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
                                     <Input
-                                        placeholder="Search patient or case no."
-                                        className="w-full pl-9 sm:w-[260px]"
+                                        value={query}
+                                        onChange={(event) =>
+                                            setQuery(event.target.value)
+                                        }
+                                        placeholder="Search order, patient, hospital no."
+                                        className="w-full pl-9 sm:w-[320px]"
                                     />
                                 </div>
 
-                                <Select defaultValue="all">
-                                    <SelectTrigger className="w-full sm:w-[190px]">
-                                        <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
+                                <Select
+                                    value={status}
+                                    onValueChange={(value) =>
+                                        setStatus(
+                                            value as TpnOrderStatus | 'All',
+                                        )
+                                    }
+                                >
+                                    <SelectTrigger className="w-full sm:w-[210px]">
+                                        <Filter className="mr-2 h-4 w-4 text-slate-400" />
                                         <SelectValue placeholder="Filter status" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="all">
-                                            All Statuses
-                                        </SelectItem>
-                                        <SelectItem value="pending-review">
-                                            Pending Review
-                                        </SelectItem>
-                                        <SelectItem value="for-compounding">
-                                            For Compounding
-                                        </SelectItem>
-                                        <SelectItem value="for-dispensing">
-                                            For Dispensing
-                                        </SelectItem>
-                                        <SelectItem value="completed">
-                                            Completed
-                                        </SelectItem>
+                                        {statusOptions.map((option) => (
+                                            <SelectItem
+                                                key={option}
+                                                value={option}
+                                            >
+                                                {option === 'All'
+                                                    ? 'All Statuses'
+                                                    : option}
+                                            </SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
                             </div>
                         </div>
                     </CardHeader>
 
-                    <CardContent>
-                        <div className="overflow-hidden rounded-lg border">
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
-                                    <thead className="bg-muted/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                                        <tr>
-                                            <th className="px-4 py-3 font-medium">
-                                                Order No.
-                                            </th>
-                                            <th className="px-4 py-3 font-medium">
-                                                Patient
-                                            </th>
-                                            <th className="px-4 py-3 font-medium">
-                                                Case No.
-                                            </th>
-                                            <th className="px-4 py-3 font-medium">
-                                                Location
-                                            </th>
-                                            <th className="px-4 py-3 font-medium">
-                                                Order Date
-                                            </th>
-                                            <th className="px-4 py-3 font-medium">
-                                                Status
-                                            </th>
-                                            <th className="px-4 py-3 text-right font-medium">
-                                                Actions
-                                            </th>
-                                        </tr>
-                                    </thead>
-
-                                    <tbody className="divide-y">
-                                        {orders.map((order) => (
-                                            <tr
-                                                key={order.id}
-                                                className="transition hover:bg-muted/40"
-                                            >
-                                                <td className="px-4 py-3 font-medium">
+                    <CardContent className="px-6 pb-6">
+                        <div className="overflow-x-auto">
+                            <table className="w-full min-w-[1040px] text-sm">
+                                <thead className="border-b border-slate-200 text-left text-xs tracking-[0.16em] text-slate-600 uppercase">
+                                    <tr>
+                                        <th className="py-3 pr-5 font-semibold">
+                                            Order No.
+                                        </th>
+                                        <th className="px-5 py-3 font-semibold">
+                                            Patient
+                                        </th>
+                                        <th className="px-5 py-3 font-semibold">
+                                            Hospital No.
+                                        </th>
+                                        <th className="px-5 py-3 font-semibold">
+                                            Location
+                                        </th>
+                                        <th className="px-5 py-3 font-semibold">
+                                            Physician
+                                        </th>
+                                        <th className="px-5 py-3 font-semibold">
+                                            Order Date
+                                        </th>
+                                        <th className="px-5 py-3 font-semibold">
+                                            Status
+                                        </th>
+                                        <th className="px-5 py-3 text-right font-semibold">
+                                            Actions
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-200">
+                                    {filteredOrders.map((order) => (
+                                        <tr
+                                            key={order.id}
+                                            className="transition hover:bg-slate-50"
+                                        >
+                                            <td className="py-4 pr-5 font-medium text-slate-900">
+                                                <Link
+                                                    href={`/tpn/orders/${order.id}`}
+                                                    className="font-medium text-slate-900 hover:text-[#2f7d32] hover:underline"
+                                                >
                                                     {order.order_no}
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <div className="font-medium">
-                                                        {order.patient_name}
-                                                    </div>
-                                                    <div className="text-xs text-muted-foreground">
-                                                        {order.hospital_no}
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    {order.case_no}
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    {order.location}
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    {order.order_date}
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <Badge
-                                                        variant="outline"
-                                                        className={getStatusClass(
-                                                            order.status,
-                                                        )}
-                                                    >
-                                                        {order.status}
-                                                    </Badge>
-                                                </td>
-                                                <td className="px-4 py-3 text-right">
+                                                </Link>
+                                            </td>
+                                            <td className="px-5 py-4">
+                                                <Link
+                                                    href={`/tpn/orders/${order.id}`}
+                                                    className="font-medium text-slate-900 hover:text-[#2f7d32] hover:underline"
+                                                >
+                                                    {getPatientName(order) ||
+                                                        'N/A'}
+                                                </Link>
+                                            </td>
+                                            <td className="px-5 py-4 font-medium text-slate-900">
+                                                {order.hospital_number || 'N/A'}
+                                            </td>
+                                            <td className="px-5 py-4 text-slate-700">
+                                                {[order.ward, order.room]
+                                                    .filter(Boolean)
+                                                    .join(' / ') || 'N/A'}
+                                            </td>
+                                            <td className="px-5 py-4 text-slate-700">
+                                                {order.prescribing_physician ||
+                                                    'N/A'}
+                                            </td>
+                                            <td className="px-5 py-4 text-slate-700">
+                                                {order.order_date}
+                                            </td>
+                                            <td className="px-5 py-4">
+                                                <Badge
+                                                    variant="outline"
+                                                    className={getStatusClass(
+                                                        order.status,
+                                                    )}
+                                                >
+                                                    {order.status}
+                                                </Badge>
+                                            </td>
+                                            <td className="px-5 py-4">
+                                                <div className="flex justify-end gap-2">
                                                     <Button
                                                         variant="outline"
-                                                        size="sm"
+                                                        size="icon"
+                                                        className="h-9 w-9"
+                                                        onClick={() =>
+                                                            handleEdit(order)
+                                                        }
                                                     >
-                                                        View
+                                                        <Pencil className="h-4 w-4" />
+                                                        <span className="sr-only">
+                                                            Edit order
+                                                        </span>
                                                     </Button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="icon"
+                                                        className="h-9 w-9 border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+                                                        onClick={() =>
+                                                            handleDelete(order)
+                                                        }
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                        <span className="sr-only">
+                                                            Delete order
+                                                        </span>
+                                                    </Button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+
+                                    {filteredOrders.length === 0 ? (
+                                        <tr>
+                                            <td
+                                                colSpan={8}
+                                                className="py-10 text-center text-sm text-slate-500"
+                                            >
+                                                No TPN orders match your search
+                                                or filter.
+                                            </td>
+                                        </tr>
+                                    ) : null}
+                                </tbody>
+                            </table>
                         </div>
                     </CardContent>
                 </Card>
             </div>
+
+            <TpnOrderDialog
+                open={dialogOpen}
+                onOpenChange={setDialogOpen}
+                initialData={editingOrder ?? undefined}
+                title={editingOrder ? 'Edit TPN Order' : 'New TPN Order'}
+                submitLabel={editingOrder ? 'Save Changes' : 'Save Draft'}
+                onSubmit={handleSubmit}
+            />
         </>
     );
 }
