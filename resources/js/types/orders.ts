@@ -56,8 +56,6 @@ export type TpnOrderFormData = {
 
     trace_elements_ml_kg_day: string;
     multivitamins_ml_day: string;
-    heparin_ml: string;
-    heparin_units_per_ml: string;
 
     osmolarity_notes: string;
 };
@@ -111,8 +109,6 @@ export const initialOrderFormData: TpnOrderFormData = {
 
     trace_elements_ml_kg_day: '',
     multivitamins_ml_day: '',
-    heparin_ml: '',
-    heparin_units_per_ml: '',
 
     osmolarity_notes: '',
 };
@@ -162,10 +158,12 @@ export const statusOptions: Array<TpnOrderStatus | 'All'> = [
 
 export const initialOrders: TpnOrder[] = [];
 
-export function getPatientName(order: Pick<
-    TpnOrderFormData,
-    'last_name' | 'first_name' | 'middle_name' | 'suffix'
->) {
+export function getPatientName(
+    order: Pick<
+        TpnOrderFormData,
+        'last_name' | 'first_name' | 'middle_name' | 'suffix'
+    >,
+) {
     const lastName = order.last_name.trim();
     const firstName = order.first_name.trim();
     const middleName = order.middle_name.trim();
@@ -256,7 +254,8 @@ export function resolveWeightForComputation(
     const currentWeight = Number(currentWeightKg);
 
     const hasBirthWeight = Number.isFinite(birthWeight) && birthWeight > 0;
-    const hasCurrentWeight = Number.isFinite(currentWeight) && currentWeight > 0;
+    const hasCurrentWeight =
+        Number.isFinite(currentWeight) && currentWeight > 0;
 
     if (hasBirthWeight && hasCurrentWeight) {
         return currentWeight > birthWeight
@@ -330,13 +329,18 @@ export function formatComputedNumber(
         return '';
     }
 
-    return value.toFixed(decimals);
+    const factor = 10 ** decimals;
+
+    return (Math.round((value + Number.EPSILON) * factor) / factor).toFixed(
+        decimals,
+    );
 }
 
-export function calculatePerKgPerDay(
-    dose: string,
-    weightKg: string,
-): string {
+export function formatVolumeNumber(value: number | null): string {
+    return formatComputedNumber(value, 2);
+}
+
+export function calculatePerKgPerDay(dose: string, weightKg: string): string {
     const doseValue = toSafeNumber(dose);
     const weight = toSafeNumber(weightKg);
 
@@ -385,25 +389,124 @@ export function calculateGir(
     );
 }
 
-export function calculateLipidVolumeMl(
-    lipidGramsPerDay: string,
-    lipidConcentration: string,
+export function calculateVolumeByPercentConcentration(
+    contents: string,
+    concentrationPercent: string,
 ): string {
-    const lipidGrams = toSafeNumber(lipidGramsPerDay);
-    const concentration = toSafeNumber(lipidConcentration);
+    const contentsValue = toSafeNumber(contents);
+    const concentration = toSafeNumber(concentrationPercent);
 
     if (
-        lipidGrams === null ||
+        contentsValue === null ||
         concentration === null ||
-        lipidGrams <= 0 ||
+        contentsValue <= 0 ||
         concentration <= 0
     ) {
         return '';
     }
 
-    const gramsPerMl = concentration / 100;
+    const amountPerMl = concentration / 100;
 
-    return formatComputedNumber(lipidGrams / gramsPerMl);
+    return formatVolumeNumber(contentsValue / amountPerMl);
+}
+
+export function calculateProteinVolumeMl(
+    proteinGramsPerDay: string,
+    aminoAcidConcentrationPercent = '6',
+): string {
+    return calculateVolumeByPercentConcentration(
+        proteinGramsPerDay,
+        aminoAcidConcentrationPercent,
+    );
+}
+
+export function calculateDextroseVolumeMl(
+    totalFluidMl: string,
+    dextrosePercent: string,
+): string {
+    const totalFluid = toSafeNumber(totalFluidMl);
+    const dextrose = toSafeNumber(dextrosePercent);
+
+    if (
+        totalFluid === null ||
+        dextrose === null ||
+        totalFluid <= 0 ||
+        dextrose <= 0
+    ) {
+        return '';
+    }
+
+    const factor = dextrose / 50;
+
+    return formatVolumeNumber(totalFluid * factor);
+}
+
+export function calculateLipidVolumeMl(
+    lipidGramsPerDay: string,
+    lipidConcentration: string,
+): string {
+    return calculateVolumeByPercentConcentration(
+        lipidGramsPerDay,
+        lipidConcentration,
+    );
+}
+
+export function calculateLipidBottleVolumeMl(lipidVolumeMl: string): string {
+    const volume = toSafeNumber(lipidVolumeMl);
+
+    if (volume === null || volume <= 0) {
+        return '';
+    }
+
+    return formatVolumeNumber(volume * 1.2);
+}
+
+export function calculateVolumeByStockConcentration(
+    requirementPerDay: string,
+    stockConcentrationPerMl: string,
+): string {
+    const requirement = toSafeNumber(requirementPerDay);
+    const stockConcentration = toSafeNumber(stockConcentrationPerMl);
+
+    if (
+        requirement === null ||
+        stockConcentration === null ||
+        requirement <= 0 ||
+        stockConcentration <= 0
+    ) {
+        return '';
+    }
+
+    return formatVolumeNumber(requirement / stockConcentration);
+}
+
+export function calculateCalciumContentPerDay(
+    calciumDose: string,
+    weightKg: string,
+): string {
+    return calculatePerKgPerDay(calciumDose, weightKg);
+}
+
+export function calculateSodiumVolumeMl(sodiumMeqPerDay: string): string {
+    return calculateVolumeByStockConcentration(sodiumMeqPerDay, '2.5');
+}
+
+export function calculatePotassiumVolumeMl(potassiumMeqPerDay: string): string {
+    return calculateVolumeByStockConcentration(potassiumMeqPerDay, '2');
+}
+
+export function calculateCalciumVolumeMl(calciumMeqPerDay: string): string {
+    return calculateVolumeByStockConcentration(calciumMeqPerDay, '0.5');
+}
+
+export function calculateMagnesiumVolumeMl(magnesiumMeqPerDay: string): string {
+    return calculateVolumeByStockConcentration(magnesiumMeqPerDay, '1');
+}
+
+export function calculatePhosphorusVolumeMl(
+    phosphorusMmolPerDay: string,
+): string {
+    return calculateVolumeByStockConcentration(phosphorusMmolPerDay, '3');
 }
 
 export function calculateRateMlPerHour(
@@ -413,12 +516,7 @@ export function calculateRateMlPerHour(
     const volume = toSafeNumber(volumeMl);
     const duration = toSafeNumber(durationHours);
 
-    if (
-        volume === null ||
-        duration === null ||
-        volume <= 0 ||
-        duration <= 0
-    ) {
+    if (volume === null || duration === null || volume <= 0 || duration <= 0) {
         return '';
     }
 
@@ -464,11 +562,40 @@ export function calculateTotalNonProteinCaloriesPerKgDay(
     const lipid = toSafeNumber(lipidCalories);
     const weight = toSafeNumber(weightKg);
 
-    if (weight === null || weight <= 0) {
+    if (dextrose === null || lipid === null || weight === null || weight <= 0) {
         return '';
     }
 
-    return formatComputedNumber(((dextrose ?? 0) + (lipid ?? 0)) / weight);
+    return formatComputedNumber((dextrose + lipid) / weight);
+}
+
+export function calculateQsVolumeMl(
+    totalFluidMl: string,
+    volumes: string[],
+): string {
+    const totalFluid = toSafeNumber(totalFluidMl);
+
+    if (totalFluid === null || totalFluid <= 0) {
+        return '';
+    }
+
+    const totalIngredientVolume = volumes.reduce((sum, volume) => {
+        const parsedVolume = toSafeNumber(volume);
+
+        if (parsedVolume === null || parsedVolume <= 0) {
+            return sum;
+        }
+
+        return sum + parsedVolume;
+    }, 0);
+
+    const qsVolume = totalFluid - totalIngredientVolume;
+
+    if (qsVolume < 0) {
+        return formatVolumeNumber(qsVolume);
+    }
+
+    return formatVolumeNumber(qsVolume);
 }
 
 export function findOrderById(id: number) {

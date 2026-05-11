@@ -1,14 +1,17 @@
 import { Head, Link } from '@inertiajs/react';
 import {
-    Activity,
     ArrowLeft,
     ClipboardList,
+    Download,
     Droplets,
     FlaskConical,
+    Pencil,
     UserRound,
 } from 'lucide-react';
+import { useState } from 'react';
 
-import { Badge } from '@/components/ui/badge';
+import { OrderRegistrationDialog } from '@/components/orders/order-registration-dialog';
+import { OrderExportSheet } from '@/components/orders/order-export-sheet';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -31,7 +34,6 @@ import {
     calculateRateMlPerHour,
     calculateTotalNonProteinCaloriesPerKgDay,
     getPatientName,
-    getStatusClass,
     resolveWeightForComputation,
     type TpnOrder,
 } from '@/types/orders';
@@ -69,65 +71,9 @@ function InfoGrid({ children }: { children: React.ReactNode }) {
     );
 }
 
-function WorkflowStatus({ order }: { order: TpnOrder }) {
-    const stages = [
-        {
-            title: 'Pending Review',
-            description:
-                'The pharmacist reviews the request, validates clinical details, and checks if the order is ready for formulation.',
-        },
-        {
-            title: 'For Compounding',
-            description:
-                'The approved formulation is prepared by the compounding team using the verified TPN requirements.',
-        },
-        {
-            title: 'For Dispensing',
-            description:
-                'The compounded TPN is ready for final release, documentation, and ward/unit dispensing.',
-        },
-    ];
-
-    return (
-        <Card className="rounded-lg border-slate-200 bg-white shadow-sm">
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-slate-900">
-                    <Activity className="h-5 w-5 text-[#2f7d32]" />
-                    Workflow Status
-                </CardTitle>
-                <CardDescription>
-                    Current status and expected movement of this order.
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                <Badge
-                    variant="outline"
-                    className={getStatusClass(order.status)}
-                >
-                    {order.status}
-                </Badge>
-
-                <div className="grid gap-3 lg:grid-cols-3">
-                    {stages.map((stage) => (
-                        <div
-                            key={stage.title}
-                            className="rounded-md border border-slate-200 p-4"
-                        >
-                            <h3 className="text-sm font-semibold text-slate-900">
-                                {stage.title}
-                            </h3>
-                            <p className="mt-2 text-sm leading-6 text-slate-600">
-                                {stage.description}
-                            </p>
-                        </div>
-                    ))}
-                </div>
-            </CardContent>
-        </Card>
-    );
-}
-
 export default function OrderShow({ order }: { order?: TpnOrder | null }) {
+    const [editDialogOpen, setEditDialogOpen] = useState(false);
+
     if (!order) {
         return (
             <>
@@ -238,17 +184,6 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
         computedWeightKg,
     );
 
-    const heparinMl = Number(order.heparin_ml);
-    const heparinUnitsPerMl = Number(order.heparin_units_per_ml);
-
-    const heparinUnits =
-        Number.isFinite(heparinMl) &&
-        Number.isFinite(heparinUnitsPerMl) &&
-        heparinMl > 0 &&
-        heparinUnitsPerMl > 0
-            ? (heparinMl * heparinUnitsPerMl).toFixed(2)
-            : '';
-
     const totalNonProteinCaloriesPerKgDay =
         calculateTotalNonProteinCaloriesPerKgDay(
             dextroseCalories,
@@ -261,35 +196,49 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
             <Head title={`${order.order_no} - ${patientName}`} />
 
             <div className="emr-content-surface flex flex-1 flex-col gap-6 p-4 md:p-6">
-                <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-                    <div className="space-y-3">
-                        <Button variant="outline" className="w-fit" asChild>
+                <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between print:hidden">
+                    <div>
+                        <div>
+                            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+                                {patientName}
+                            </h1>
+                            <p className="text-sm text-slate-500">
+                                {order.order_no} |{' '}
+                                {order.hospital_number || 'N/A'}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <Button variant="outline" asChild>
                             <Link href="/orders">
                                 <ArrowLeft className="mr-2 h-4 w-4" />
                                 Back to Orders
                             </Link>
                         </Button>
 
-                        <div>
-                            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-                                {patientName}
-                            </h1>
-                            <p className="text-sm text-slate-500">
-                                {order.order_no} /{' '}
-                                {order.hospital_number || 'No hospital number'}
-                            </p>
-                        </div>
-                    </div>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className="cursor-pointer"
+                            onClick={() => setEditDialogOpen(true)}
+                        >
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Edit
+                        </Button>
 
-                    <Badge
-                        variant="outline"
-                        className={getStatusClass(order.status)}
-                    >
-                        {order.status}
-                    </Badge>
+                        <Button
+                            type="button"
+                            className="cursor-pointer bg-[#2f7d32] text-white hover:bg-[#27692a]"
+                            onClick={() => window.print()}
+                        >
+                            <Download className="mr-2 h-4 w-4" />
+                            Export
+                        </Button>
+                    </div>
                 </div>
 
-                <Card className="rounded-lg border-slate-200 bg-white shadow-sm">
+                <Card className="rounded-lg border-slate-200 bg-white shadow-sm print:hidden">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2 text-slate-900">
                             <FlaskConical className="h-5 w-5 text-[#2f7d32]" />
@@ -449,7 +398,7 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                     label="Calcium"
                                     value={
                                         calciumMgPerDay
-                                            ? `${calciumMgPerDay} mg/day`
+                                            ? `${calciumMgPerDay} meqs/day`
                                             : ''
                                     }
                                 />
@@ -485,14 +434,6 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                             : ''
                                     }
                                 />
-                                <InfoItem
-                                    label="Heparin"
-                                    value={
-                                        heparinUnits
-                                            ? `${heparinUnits} I.U.`
-                                            : ''
-                                    }
-                                />
                             </InfoGrid>
                         </div>
 
@@ -523,7 +464,7 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                     </CardContent>
                 </Card>
 
-                <Card className="rounded-lg border-slate-200 bg-white shadow-sm">
+                <Card className="rounded-lg border-slate-200 bg-white shadow-sm print:hidden">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2 text-slate-900">
                             <ClipboardList className="h-5 w-5 text-[#2f7d32]" />
@@ -576,7 +517,7 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                     </CardContent>
                 </Card>
 
-                <Card className="rounded-lg border-slate-200 bg-white shadow-sm">
+                <Card className="rounded-lg border-slate-200 bg-white shadow-sm print:hidden">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2 text-slate-900">
                             <Droplets className="h-5 w-5 text-[#2f7d32]" />
@@ -615,7 +556,7 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                     </CardContent>
                 </Card>
 
-                <Card className="rounded-lg border-slate-200 bg-white shadow-sm">
+                <Card className="rounded-lg border-slate-200 bg-white shadow-sm print:hidden">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2 text-slate-900">
                             <FlaskConical className="h-5 w-5 text-[#2f7d32]" />
@@ -659,9 +600,16 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                         </InfoGrid>
                     </CardContent>
                 </Card>
-
-                <WorkflowStatus order={order} />
             </div>
+
+            <OrderExportSheet order={order} />
+            <OrderRegistrationDialog
+                open={editDialogOpen}
+                onOpenChange={setEditDialogOpen}
+                initialData={order}
+                title="Edit TPN Order"
+                submitLabel="Save Changes"
+            />
         </>
     );
 }
@@ -669,7 +617,7 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
 OrderShow.layout = {
     breadcrumbs: [
         {
-            title: 'TPN Orders',
+            title: 'Orders',
             href: '/orders',
         },
         {

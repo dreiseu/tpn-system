@@ -1,5 +1,5 @@
-import { Head } from '@inertiajs/react';
-import { Beaker, ClipboardCheck, PackageCheck, UsersRound } from 'lucide-react';
+import { Head, Link } from '@inertiajs/react';
+import { Beaker, ClipboardCheck, PackageCheck, Plus, UsersRound } from 'lucide-react';
 import { useState } from 'react';
 import { OrderRegistrationDialog } from '@/components/orders/order-registration-dialog';
 import { Badge } from '@/components/ui/badge';
@@ -11,47 +11,39 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
-import { formatManilaDate, formatManilaDateTime } from '@/lib/date';
+import { getPatientName, type TpnOrder } from '@/types/orders';
 
 type DashboardProps = {
     stats?: {
-        total_patients: number;
-        registrations_today: number;
-        active_encounters: number;
-        admissions_today: number;
+        total_orders: number;
+        orders_today: number;
+        pending_review: number;
+        for_dispensing: number;
     };
-    recentPatients?: Array<{
-        id: number;
-        hospital_number: string;
-        display_name: string;
-        birth_date?: string | null;
-        sex: string | null;
-        mobile_number?: string | null;
-        created_at?: string | null;
-    }>;
+    recentOrders?: TpnOrder[];
 };
 
 const statCards = [
     {
-        key: 'total_patients',
-        title: 'TPN Patients',
-        description: 'Patients tracked for nutrition support',
+        key: 'total_orders',
+        title: 'TPN Orders',
+        description: 'Digitized TPN order forms',
         icon: UsersRound,
     },
     {
-        key: 'registrations_today',
-        title: 'New Requests Today',
-        description: 'TPN orders opened for screening',
+        key: 'orders_today',
+        title: 'Orders Today',
+        description: 'TPN forms encoded today',
         icon: ClipboardCheck,
     },
     {
-        key: 'active_encounters',
-        title: 'Active Formulations',
-        description: 'Therapy plans currently in progress',
+        key: 'pending_review',
+        title: 'Pending Review',
+        description: 'Orders awaiting pharmacist review',
         icon: Beaker,
     },
     {
-        key: 'admissions_today',
+        key: 'for_dispensing',
         title: 'For Dispensing',
         description: 'Prepared bags pending release',
         icon: PackageCheck,
@@ -59,15 +51,15 @@ const statCards = [
 ] as const;
 
 const emptyStats = {
-    total_patients: 0,
-    registrations_today: 0,
-    active_encounters: 0,
-    admissions_today: 0,
+    total_orders: 0,
+    orders_today: 0,
+    pending_review: 0,
+    for_dispensing: 0,
 };
 
 export default function Dashboard({
     stats = emptyStats,
-    recentPatients = [],
+    recentOrders = [],
 }: DashboardProps) {
     const [orderDialogOpen, setOrderDialogOpen] = useState(false);
 
@@ -81,16 +73,17 @@ export default function Dashboard({
                             TPN Operations Dashboard
                         </h1>
                         <p className="text-sm text-slate-500">
-                            Patient nutrition support, formulation, and
-                            dispensing activity for the current system snapshot.
+                            Digital TPN order forms and recent nutrition support
+                            requests.
                         </p>
                     </div>
 
                     <div className="flex gap-3">
                         <Button
-                            className="bg-[#2f7d32] text-white hover:bg-[#27692a]"
+                            className="bg-[#2f7d32] text-white hover:bg-[#27692a] cursor-pointer"
                             onClick={() => setOrderDialogOpen(true)}
                         >
+                            <Plus className="mr-2 h-4 w-4" />
                             New TPN Order
                         </Button>
                     </div>
@@ -131,65 +124,66 @@ export default function Dashboard({
                     <CardHeader className="flex flex-row items-center justify-between border-b border-slate-200 pb-5">
                         <div>
                             <CardTitle className="pb-2 text-slate-900">
-                                Recent TPN Patient Activity
+                                Recent TPN Orders
                             </CardTitle>
                             <CardDescription className="text-slate-500">
-                                Latest patients associated with nutrition
-                                support workflows.
+                                Latest digitized TPN order forms.
                             </CardDescription>
                         </div>
                         <Badge
                             variant="outline"
                             className="border-slate-300 bg-white text-slate-700"
                         >
-                            {recentPatients.length} visible
+                            {recentOrders.length} visible
                         </Badge>
                     </CardHeader>
                     <CardContent className="emr-scrollbar overflow-x-auto">
                         <div className="min-w-[820px]">
-                            <div className="grid grid-cols-[1.2fr_1.8fr_1fr_0.8fr_1fr_1fr] gap-4 border-b border-slate-200 pt-3 pb-3 text-xs font-semibold tracking-[0.12em] text-slate-500 uppercase">
-                                <span>Hospital No.</span>
+                            <div className="grid grid-cols-[1.2fr_1.8fr_1.2fr_0.8fr_1fr_1.2fr] gap-4 border-b border-slate-200 pt-3 pb-3 text-xs font-semibold tracking-[0.12em] text-slate-500 uppercase">
+                                <span>Order No.</span>
                                 <span>Patient</span>
-                                <span>Birth Date</span>
-                                <span>Sex</span>
-                                <span>Mobile</span>
-                                <span>Registered</span>
+                                <span>Hospital No.</span>
+                                <span>Weight</span>
+                                <span>Ward</span>
+                                <span>Order Date</span>
                             </div>
                             <div className="divide-y divide-slate-200">
-                                {recentPatients.length > 0 ? (
-                                    recentPatients.map((patient) => (
+                                {recentOrders.length > 0 ? (
+                                    recentOrders.map((order) => (
                                         <div
-                                            key={patient.id}
-                                            className="grid grid-cols-[1.2fr_1.8fr_1fr_0.8fr_1fr_1fr] gap-4 py-4 text-sm"
+                                            key={order.id}
+                                            className="grid grid-cols-[1.2fr_1.8fr_1.2fr_0.8fr_1fr_1.2fr] gap-4 py-4 text-sm"
                                         >
                                             <span className="font-medium text-slate-900">
-                                                {patient.hospital_number}
+                                                <Link
+                                                    href={`/orders/${order.id}`}
+                                                    className="hover:text-[#2f7d32] hover:underline"
+                                                >
+                                                    {order.order_no}
+                                                </Link>
                                             </span>
                                             <span className="font-medium text-slate-900">
-                                                {patient.display_name}
+                                                {getPatientName(order) || 'N/A'}
                                             </span>
                                             <span className="text-slate-700">
-                                                {formatManilaDate(
-                                                    patient.birth_date,
-                                                )}
-                                            </span>
-                                            <span className="text-slate-700 capitalize">
-                                                {patient.sex ?? 'N/A'}
+                                                {order.hospital_number || 'N/A'}
                                             </span>
                                             <span className="text-slate-700">
-                                                {patient.mobile_number ?? 'N/A'}
+                                                {order.current_weight_kg ||
+                                                    order.birth_weight_kg ||
+                                                    'N/A'}
                                             </span>
                                             <span className="text-slate-700">
-                                                {formatManilaDateTime(
-                                                    patient.created_at,
-                                                )}
+                                                {order.ward || 'N/A'}
+                                            </span>
+                                            <span className="text-slate-700">
+                                                {order.order_date || 'N/A'}
                                             </span>
                                         </div>
                                     ))
                                 ) : (
                                     <div className="py-8 text-sm text-slate-500">
-                                        No TPN patient activity has been
-                                        recorded yet.
+                                        No TPN orders have been recorded yet.
                                     </div>
                                 )}
                             </div>

@@ -17,7 +17,7 @@ const mainNavItems: NavItem[] = [
         icon: LayoutGrid,
     },
     {
-        title: 'TPN Orders',
+        title: 'Orders',
         href: '/orders',
         icon: ClipboardCheck,
     },

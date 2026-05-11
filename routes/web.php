@@ -9,7 +9,8 @@ Route::inertia('/', 'welcome', [
 ])->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::inertia('dashboard', 'dashboard')->name('dashboard');
+    Route::get('dashboard', [TpnOrderController::class, 'dashboard'])
+        ->name('dashboard');
 
     Route::get('orders', [TpnOrderController::class, 'index'])
         ->name('orders.index');
@@ -19,6 +20,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::post('orders', [TpnOrderController::class, 'store'])
         ->name('orders.store');
+
+    Route::put('orders/{order}', [TpnOrderController::class, 'update'])
+        ->name('orders.update');
 
     Route::get('orders/{order}', [TpnOrderController::class, 'show'])
         ->name('orders.show');

@@ -15,6 +15,34 @@ use Inertia\Response;
 
 class TpnOrderController extends Controller
 {
+    public function dashboard(): Response
+    {
+        $today = Carbon::today();
+
+        $recentOrders = TpnOrder::query()
+            ->with('computation')
+            ->orderByDesc('tpn_order_id')
+            ->limit(8)
+            ->get()
+            ->map(fn(TpnOrder $order) => $this->formatOrderForFrontend($order));
+
+        return Inertia::render('dashboard', [
+            'stats' => [
+                'total_orders' => TpnOrder::query()->count(),
+                'orders_today' => TpnOrder::query()
+                    ->whereDate('date_created', $today)
+                    ->count(),
+                'pending_review' => TpnOrder::query()
+                    ->where('status', 'Pending Review')
+                    ->count(),
+                'for_dispensing' => TpnOrder::query()
+                    ->where('status', 'For Dispensing')
+                    ->count(),
+            ],
+            'recentOrders' => $recentOrders,
+        ]);
+    }
+
     public function index(): Response
     {
         $orders = TpnOrder::query()
@@ -59,66 +87,12 @@ class TpnOrderController extends Controller
             $order = TpnOrder::create([
                 'order_no' => $orderNo,
                 'status' => 'Pending Review',
-
-                'temporary_request' => $validated['temporary_request'] ?? false,
-
-                'last_name' => $validated['last_name'] ?? null,
-                'first_name' => $validated['first_name'] ?? null,
-                'middle_name' => $validated['middle_name'] ?? null,
-                'suffix' => $validated['suffix'] ?? null,
-
-                'hospital_number' => $validated['hospital_number'] ?? null,
-                'date_of_birth' => $validated['date_of_birth'] ?? null,
-                'sex' => $validated['sex'] ?? null,
-
-                'ward' => $validated['ward'] ?? null,
-                'room' => $validated['room'] ?? null,
-                'prescribing_physician' => $validated['prescribing_physician'] ?? null,
-                'is_initial_order' => $validated['is_initial_order'] ?? false,
-
-                'birth_weight_kg' => $validated['birth_weight_kg'] ?? null,
-                'current_weight_kg' => $validated['current_weight_kg'] ?? null,
-                'height_cm' => $validated['height_cm'] ?? null,
-                'diagnosis' => $validated['diagnosis'] ?? null,
-
-                'total_fluid_ml' => $validated['total_fluid_ml'] ?? null,
-                'duration_hours' => $validated['duration_hours'] ?? null,
-                'route' => $validated['route'] ?? null,
-
-                'created_by' => $userId,
-                'modified_by' => $userId,
-                'date_created' => $now,
-                'date_modified' => $now,
+                ...$this->orderAttributes($validated, $userId, $now, true),
             ]);
 
             TpnOrderComputation::create([
                 'tpn_order_id' => $order->tpn_order_id,
-
-                'protein_g_per_kg_day' => $validated['protein_g_per_kg_day'] ?? null,
-
-                'dextrose_percent' => $validated['dextrose_percent'] ?? null,
-
-                'lipid_g_per_kg_day' => $validated['lipid_g_per_kg_day'] ?? null,
-                'lipid_concentration' => $validated['lipid_concentration'] ?? null,
-                'lipid_duration_hours' => $validated['lipid_duration_hours'] ?? null,
-                'lipid_piggyback' => $validated['lipid_piggyback'] ?? false,
-                'lipid_separate_line' => $validated['lipid_separate_line'] ?? false,
-
-                'sodium_meq_kg_day' => $validated['sodium_meq_kg_day'] ?? null,
-                'potassium_meq_kg_day' => $validated['potassium_meq_kg_day'] ?? null,
-                'calcium_mg_kg_day' => $validated['calcium_mg_kg_day'] ?? null,
-                'magnesium_meq_kg_day' => $validated['magnesium_meq_kg_day'] ?? null,
-                'phosphorus_mmol_kg_day' => $validated['phosphorus_mmol_kg_day'] ?? null,
-
-                'trace_elements_ml_kg_day' => $validated['trace_elements_ml_kg_day'] ?? null,
-                'multivitamins_ml_day' => $validated['multivitamins_ml_day'] ?? null,
-                'heparin_ml' => $validated['heparin_ml'] ?? null,
-                'heparin_units_per_ml' => $validated['heparin_units_per_ml'] ?? null,
-
-                'osmolarity_notes' => $validated['osmolarity_notes'] ?? null,
-
-                'date_created' => $now,
-                'date_modified' => $now,
+                ...$this->computationAttributes($validated, $now, true),
             ]);
 
             TpnOrderStatusHistory::create([
@@ -141,11 +115,109 @@ class TpnOrderController extends Controller
             ]);
     }
 
+    public function update(StoreTpnOrderRequest $request, TpnOrder $order): RedirectResponse
+    {
+        $validated = $request->validated();
+
+        DB::transaction(function () use ($validated, $order) {
+            $now = Carbon::now();
+            $userId = Auth::id();
+
+            $order->update($this->orderAttributes($validated, $userId, $now));
+
+            TpnOrderComputation::updateOrCreate(
+                ['tpn_order_id' => $order->tpn_order_id],
+                $this->computationAttributes($validated, $now, !$order->computation()->exists()),
+            );
+        });
+
+        return redirect()
+            ->back()
+            ->with('toast', [
+                'type' => 'success',
+                'message' => "TPN order {$order->order_no} has been updated.",
+            ]);
+    }
+
     private function generateOrderNumber(): string
     {
         $result = DB::select('EXEC spGenerateTpnOrderNumber');
 
         return $result[0]->order_no;
+    }
+
+    private function orderAttributes(array $validated, ?int $userId, Carbon $now, bool $creating = false): array
+    {
+        $attributes = [
+            'temporary_request' => $validated['temporary_request'] ?? false,
+
+            'last_name' => $validated['last_name'] ?? null,
+            'first_name' => $validated['first_name'] ?? null,
+            'middle_name' => $validated['middle_name'] ?? null,
+            'suffix' => $validated['suffix'] ?? null,
+
+            'hospital_number' => $validated['hospital_number'] ?? null,
+            'date_of_birth' => $validated['date_of_birth'] ?? null,
+            'sex' => $validated['sex'] ?? null,
+
+            'ward' => $validated['ward'] ?? null,
+            'room' => $validated['room'] ?? null,
+            'prescribing_physician' => $validated['prescribing_physician'] ?? null,
+            'is_initial_order' => $validated['is_initial_order'] ?? false,
+
+            'birth_weight_kg' => $validated['birth_weight_kg'] ?? null,
+            'current_weight_kg' => $validated['current_weight_kg'] ?? null,
+            'height_cm' => $validated['height_cm'] ?? null,
+            'diagnosis' => $validated['diagnosis'] ?? null,
+
+            'total_fluid_ml' => $validated['total_fluid_ml'] ?? null,
+            'duration_hours' => $validated['duration_hours'] ?? null,
+            'route' => $validated['route'] ?? null,
+
+            'modified_by' => $userId,
+            'date_modified' => $now,
+        ];
+
+        if ($creating) {
+            $attributes['created_by'] = $userId;
+            $attributes['date_created'] = $now;
+        }
+
+        return $attributes;
+    }
+
+    private function computationAttributes(array $validated, Carbon $now, bool $creating = false): array
+    {
+        $attributes = [
+            'protein_g_per_kg_day' => $validated['protein_g_per_kg_day'] ?? null,
+
+            'dextrose_percent' => $validated['dextrose_percent'] ?? null,
+
+            'lipid_g_per_kg_day' => $validated['lipid_g_per_kg_day'] ?? null,
+            'lipid_concentration' => $validated['lipid_concentration'] ?? null,
+            'lipid_duration_hours' => $validated['lipid_duration_hours'] ?? null,
+            'lipid_piggyback' => $validated['lipid_piggyback'] ?? false,
+            'lipid_separate_line' => $validated['lipid_separate_line'] ?? false,
+
+            'sodium_meq_kg_day' => $validated['sodium_meq_kg_day'] ?? null,
+            'potassium_meq_kg_day' => $validated['potassium_meq_kg_day'] ?? null,
+            'calcium_mg_kg_day' => $validated['calcium_mg_kg_day'] ?? null,
+            'magnesium_meq_kg_day' => $validated['magnesium_meq_kg_day'] ?? null,
+            'phosphorus_mmol_kg_day' => $validated['phosphorus_mmol_kg_day'] ?? null,
+
+            'trace_elements_ml_kg_day' => $validated['trace_elements_ml_kg_day'] ?? null,
+            'multivitamins_ml_day' => $validated['multivitamins_ml_day'] ?? null,
+
+            'osmolarity_notes' => $validated['osmolarity_notes'] ?? null,
+
+            'date_modified' => $now,
+        ];
+
+        if ($creating) {
+            $attributes['date_created'] = $now;
+        }
+
+        return $attributes;
     }
 
     private function formatOrderForFrontend(TpnOrder $order): array
@@ -202,9 +274,7 @@ class TpnOrderController extends Controller
 
             'trace_elements_ml_kg_day' => $this->decimalToString($computation?->trace_elements_ml_kg_day),
             'multivitamins_ml_day' => $this->decimalToString($computation?->multivitamins_ml_day),
-            'heparin_ml' => $this->decimalToString($computation?->heparin_ml),
-            'heparin_units_per_ml' => $this->decimalToString($computation?->heparin_units_per_ml),
-
+        
             'osmolarity_notes' => $computation?->osmolarity_notes ?? '',
         ];
     }

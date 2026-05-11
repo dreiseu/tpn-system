@@ -33,8 +33,6 @@ class TpnOrderComputation extends Model
 
         'trace_elements_ml_kg_day',
         'multivitamins_ml_day',
-        'heparin_ml',
-        'heparin_units_per_ml',
 
         'osmolarity_notes',
 
@@ -61,8 +59,6 @@ class TpnOrderComputation extends Model
 
         'trace_elements_ml_kg_day' => 'decimal:2',
         'multivitamins_ml_day' => 'decimal:2',
-        'heparin_ml' => 'decimal:2',
-        'heparin_units_per_ml' => 'decimal:2',
 
         'date_created' => 'datetime',
         'date_modified' => 'datetime',

@@ -27,7 +27,16 @@ import {
     calculateGir,
     calculateInfusionRate,
     calculateLipidCalories,
+    calculateProteinVolumeMl,
+    calculateDextroseVolumeMl,
     calculateLipidVolumeMl,
+    calculateLipidBottleVolumeMl,
+    calculateSodiumVolumeMl,
+    calculatePotassiumVolumeMl,
+    calculateCalciumVolumeMl,
+    calculateCalciumContentPerDay,
+    calculateMagnesiumVolumeMl,
+    calculatePhosphorusVolumeMl,
     calculatePerKgPerDay,
     calculateProteinCalories,
     calculateRateMlPerHour,
@@ -36,10 +45,20 @@ import {
     initialOrderFormData,
     orderTabs,
     resolveWeightForComputation,
+    calculateQsVolumeMl,
     type OrderTabKey,
     type TpnOrder,
     type TpnOrderFormData,
 } from '@/types/orders';
+import { CalendarIcon } from 'lucide-react';
+import { Calendar } from '@/components/ui/calendar';
+import {
+    Dialog,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 
 type OrderFormProps = {
     initialData?: Partial<TpnOrder>;
@@ -63,6 +82,10 @@ export function OrderForm({
 
     const [activeTab, setActiveTab] = useState<OrderTabKey>('patient');
 
+    const [attemptedRequiredFields, setAttemptedRequiredFields] = useState<
+        Partial<Record<keyof TpnOrderFormData, boolean>>
+    >({});
+
     useEffect(() => {
         setData({
             ...initialOrderFormData,
@@ -70,6 +93,7 @@ export function OrderForm({
         });
 
         setActiveTab('patient');
+        setAttemptedRequiredFields({});
     }, [initialData]);
 
     const computedAge = useMemo(() => {
@@ -95,8 +119,19 @@ export function OrderForm({
         return calculatePerKgPerDay(data.protein_g_per_kg_day, computedWeightKg);
     }, [data.protein_g_per_kg_day, computedWeightKg]);
 
+    const proteinVolumeMl = useMemo(() => {
+        return calculateProteinVolumeMl(proteinGramsPerDay)
+    }, [proteinGramsPerDay]);
+
     const dextroseGramsPerDay = useMemo(() => {
         return calculateDextroseGramsPerDay(
+            data.total_fluid_ml,
+            data.dextrose_percent,
+        );
+    }, [data.total_fluid_ml, data.dextrose_percent]);
+
+    const dextroseVolumeMl = useMemo(() => {
+        return calculateDextroseVolumeMl(
             data.total_fluid_ml,
             data.dextrose_percent,
         );
@@ -121,6 +156,10 @@ export function OrderForm({
         );
     }, [lipidGramsPerDay, data.lipid_concentration]);
 
+    const lipidBottleVolumeMl = useMemo(() => {
+        return calculateLipidBottleVolumeMl(lipidVolumeMl);
+    }, [lipidVolumeMl]);
+
     const lipidRateMlPerHour = useMemo(() => {
         return calculateRateMlPerHour(lipidVolumeMl, data.lipid_duration_hours);
     }, [lipidVolumeMl, data.lipid_duration_hours]);
@@ -134,7 +173,10 @@ export function OrderForm({
     }, [data.potassium_meq_kg_day, computedWeightKg]);
 
     const calciumMgPerDay = useMemo(() => {
-        return calculatePerKgPerDay(data.calcium_mg_kg_day, computedWeightKg);
+        return calculateCalciumContentPerDay(
+            data.calcium_mg_kg_day,
+            computedWeightKg,
+        );
     }, [data.calcium_mg_kg_day, computedWeightKg]);
 
     const magnesiumMeqPerDay = useMemo(() => {
@@ -145,28 +187,33 @@ export function OrderForm({
         return calculatePerKgPerDay(data.phosphorus_mmol_kg_day, computedWeightKg);
     }, [data.phosphorus_mmol_kg_day, computedWeightKg]);
 
+    const sodiumVolumeMl = useMemo(() => {
+        return calculateSodiumVolumeMl(sodiumMeqPerDay);
+    }, [sodiumMeqPerDay]);
+
+    const potassiumVolumeMl = useMemo(() => {
+        return calculatePotassiumVolumeMl(potassiumMeqPerDay);
+    }, [potassiumMeqPerDay]);
+
+    const calciumVolumeMl = useMemo(() => {
+        return calculateCalciumVolumeMl(calciumMgPerDay);
+    }, [calciumMgPerDay]);
+
+    const magnesiumVolumeMl = useMemo(() => {
+        return calculateMagnesiumVolumeMl(magnesiumMeqPerDay);
+    }, [magnesiumMeqPerDay]);
+
+    const phosphorusVolumeMl = useMemo(() => {
+        return calculatePhosphorusVolumeMl(phosphorusMmolPerDay);
+    }, [phosphorusMmolPerDay]);
+
     const traceElementsMlPerDay = useMemo(() => {
-        return calculatePerKgPerDay(
-            data.trace_elements_ml_kg_day,
-            computedWeightKg,
-        );
-    }, [data.trace_elements_ml_kg_day, computedWeightKg]);
+        return data.trace_elements_ml_kg_day;
+    }, [data.trace_elements_ml_kg_day]);
 
-    const heparinUnits = useMemo(() => {
-        const heparinMl = Number(data.heparin_ml);
-        const unitsPerMl = Number(data.heparin_units_per_ml);
-
-        if (
-            !Number.isFinite(heparinMl) ||
-            !Number.isFinite(unitsPerMl) ||
-            heparinMl <= 0 ||
-            unitsPerMl <= 0
-        ) {
-            return '';
-        }
-
-        return (heparinMl * unitsPerMl).toFixed(2);
-    }, [data.heparin_ml, data.heparin_units_per_ml]);
+    const traceElementsVolumeMl = useMemo(() => {
+        return formatVolumeDisplay(traceElementsMlPerDay);
+    }, [traceElementsMlPerDay]);
 
     const dextroseCalories = useMemo(() => {
         return calculateDextroseCalories(dextroseGramsPerDay);
@@ -188,9 +235,106 @@ export function OrderForm({
         );
     }, [dextroseCalories, lipidCalories, computedWeightKg]);
 
+    const multivitaminsVolumeMl = useMemo(() => {
+        return formatVolumeDisplay(data.multivitamins_ml_day);
+    }, [data.multivitamins_ml_day]);
+
+    const lipidVolumeForQs = data.lipid_piggyback ? lipidVolumeMl : '';
+
+    const qsVolumeMl = useMemo(() => {
+        return calculateQsVolumeMl(data.total_fluid_ml, [
+            proteinVolumeMl,
+            dextroseVolumeMl,
+            lipidVolumeForQs,
+            sodiumVolumeMl,
+            potassiumVolumeMl,
+            calciumVolumeMl,
+            magnesiumVolumeMl,
+            phosphorusVolumeMl,
+            traceElementsVolumeMl,
+            multivitaminsVolumeMl,
+        ]);
+    }, [
+        data.total_fluid_ml,
+        proteinVolumeMl,
+        dextroseVolumeMl,
+        lipidVolumeForQs,
+        sodiumVolumeMl,
+        potassiumVolumeMl,
+        calciumVolumeMl,
+        magnesiumVolumeMl,
+        phosphorusVolumeMl,
+        traceElementsVolumeMl,
+        multivitaminsVolumeMl,
+    ]);
+
     const currentTabIndex = orderTabs.findIndex((tab) => tab.key === activeTab);
     const isFirstTab = currentTabIndex === 0;
     const isLastTab = currentTabIndex === orderTabs.length - 1;
+
+    const requiredFieldsByTab: Record<OrderTabKey, Array<keyof TpnOrderFormData>> = {
+        patient: ['last_name', 'first_name'],
+        clinical: ['current_weight_kg'],
+        requirements: ['total_fluid_ml', 'duration_hours'],
+        computation: [],
+        review: [],
+    };
+
+    const requiredFieldLabels: Partial<Record<keyof TpnOrderFormData, string>> = {
+        last_name: 'Last name',
+        first_name: 'First name',
+        current_weight_kg: 'Current weight',
+        total_fluid_ml: 'Total fluid',
+        duration_hours: 'Duration',
+    };
+
+    function isRequiredFieldEmpty(field: keyof TpnOrderFormData) {
+        const value = data[field];
+
+        if (typeof value === 'boolean') {
+            return false;
+        }
+
+        return String(value ?? '').trim() === '';
+    }
+
+    function getMissingRequiredFields(tab: OrderTabKey) {
+        return requiredFieldsByTab[tab].filter((field) =>
+            isRequiredFieldEmpty(field),
+        );
+    }
+
+    function markRequiredFieldsAsAttempted(
+        fields: Array<keyof TpnOrderFormData>,
+    ) {
+        setAttemptedRequiredFields((current) => {
+            const next = { ...current };
+
+            fields.forEach((field) => {
+                next[field] = true;
+            });
+
+            return next;
+        });
+    }
+
+    function fieldHasError(field: keyof TpnOrderFormData) {
+        return attemptedRequiredFields[field] === true && isRequiredFieldEmpty(field);
+    }
+
+    function getFieldErrorClass(field: keyof TpnOrderFormData) {
+        return fieldHasError(field)
+            ? 'border-red-500 bg-red-50 focus-visible:ring-red-500'
+            : '';
+    }
+
+    function getFieldErrorMessage(field: keyof TpnOrderFormData) {
+        if (!fieldHasError(field)) {
+            return undefined;
+        }
+
+        return `${requiredFieldLabels[field] ?? 'This field'} is required.`;
+    }
 
     function updateField<K extends keyof TpnOrderFormData>(
         field: K,
@@ -211,14 +355,35 @@ export function OrderForm({
     }
 
     function requestNextTab() {
-        if (isLastTab) {
+        const missingFields = getMissingRequiredFields(activeTab);
+
+        if (missingFields.length > 0) {
+            markRequiredFieldsAsAttempted(missingFields);
             return;
         }
 
-        setActiveTab(orderTabs[currentTabIndex + 1].key);
+        if (!isLastTab) {
+            setActiveTab(orderTabs[currentTabIndex + 1].key);
+        }
     }
 
     function handleSubmit() {
+        const tabsToValidate: OrderTabKey[] = [
+            'patient',
+            'clinical',
+            'requirements',
+        ];
+
+        for (const tab of tabsToValidate) {
+            const missingFields = getMissingRequiredFields(tab);
+
+            if (missingFields.length > 0) {
+                markRequiredFieldsAsAttempted(missingFields);
+                setActiveTab(tab);
+                return;
+            }
+        }
+
         onSubmit?.(data);
     }
 
@@ -226,23 +391,29 @@ export function OrderForm({
         patient: (
             <PatientInformationSection
                 data={data}
-                computedAge={computedAge}
                 updateField={updateField}
+                computedAge={computedAge}
+                getFieldErrorClass={getFieldErrorClass}
+                getFieldErrorMessage={getFieldErrorMessage}
             />
         ),
         clinical: (
             <ClinicalDetailsSection
                 data={data}
+                updateField={updateField}
                 computedWeightKg={computedWeightKg}
                 computedBmi={computedBmi}
-                updateField={updateField}
+                getFieldErrorClass={getFieldErrorClass}
+                getFieldErrorMessage={getFieldErrorMessage}
             />
         ),
         requirements: (
             <TpnRequirementsSection
                 data={data}
-                computedRateMlPerHour={computedRateMlPerHour}
                 updateField={updateField}
+                computedRateMlPerHour={computedRateMlPerHour}
+                getFieldErrorClass={getFieldErrorClass}
+                getFieldErrorMessage={getFieldErrorMessage}
             />
         ),
         computation: (
@@ -251,24 +422,34 @@ export function OrderForm({
                 computedWeightKg={computedWeightKg}
                 computedRateMlPerHour={computedRateMlPerHour}
                 proteinGramsPerDay={proteinGramsPerDay}
+                proteinVolumeMl={proteinVolumeMl}
                 dextroseGramsPerDay={dextroseGramsPerDay}
+                dextroseVolumeMl={dextroseVolumeMl}
                 gir={gir}
                 lipidGramsPerDay={lipidGramsPerDay}
                 lipidVolumeMl={lipidVolumeMl}
+                lipidBottleVolumeMl={lipidBottleVolumeMl}
                 lipidRateMlPerHour={lipidRateMlPerHour}
                 sodiumMeqPerDay={sodiumMeqPerDay}
                 potassiumMeqPerDay={potassiumMeqPerDay}
                 calciumMgPerDay={calciumMgPerDay}
                 magnesiumMeqPerDay={magnesiumMeqPerDay}
                 phosphorusMmolPerDay={phosphorusMmolPerDay}
+                sodiumVolumeMl={sodiumVolumeMl}
+                potassiumVolumeMl={potassiumVolumeMl}
+                calciumVolumeMl={calciumVolumeMl}
+                magnesiumVolumeMl={magnesiumVolumeMl}
+                phosphorusVolumeMl={phosphorusVolumeMl}
                 traceElementsMlPerDay={traceElementsMlPerDay}
-                heparinUnits={heparinUnits}
+                traceElementsVolumeMl={traceElementsVolumeMl}
                 dextroseCalories={dextroseCalories}
                 proteinCalories={proteinCalories}
                 lipidCalories={lipidCalories}
                 totalNonProteinCaloriesPerKgDay={
                     totalNonProteinCaloriesPerKgDay
                 }
+                qsVolumeMl={qsVolumeMl}
+                multivitaminsVolumeMl={multivitaminsVolumeMl}
                 updateField={updateField}
             />
         ),
@@ -281,11 +462,14 @@ export function OrderForm({
                 computedRateMlPerHour={computedRateMlPerHour}
                 proteinGramsPerDay={proteinGramsPerDay}
                 proteinCalories={proteinCalories}
+                proteinVolumeMl={proteinVolumeMl}
                 dextroseGramsPerDay={dextroseGramsPerDay}
                 dextroseCalories={dextroseCalories}
+                dextroseVolumeMl={dextroseVolumeMl}
                 gir={gir}
                 lipidGramsPerDay={lipidGramsPerDay}
                 lipidVolumeMl={lipidVolumeMl}
+                lipidBottleVolumeMl={lipidBottleVolumeMl}
                 lipidRateMlPerHour={lipidRateMlPerHour}
                 lipidCalories={lipidCalories}
                 sodiumMeqPerDay={sodiumMeqPerDay}
@@ -293,11 +477,18 @@ export function OrderForm({
                 calciumMgPerDay={calciumMgPerDay}
                 magnesiumMeqPerDay={magnesiumMeqPerDay}
                 phosphorusMmolPerDay={phosphorusMmolPerDay}
+                sodiumVolumeMl={sodiumVolumeMl}
+                potassiumVolumeMl={potassiumVolumeMl}
+                calciumVolumeMl={calciumVolumeMl}
+                magnesiumVolumeMl={magnesiumVolumeMl}
+                phosphorusVolumeMl={phosphorusVolumeMl}
                 traceElementsMlPerDay={traceElementsMlPerDay}
-                heparinUnits={heparinUnits}
+                traceElementsVolumeMl={traceElementsVolumeMl}
                 totalNonProteinCaloriesPerKgDay={
                     totalNonProteinCaloriesPerKgDay
                 }
+                qsVolumeMl={qsVolumeMl}
+                multivitaminsVolumeMl={multivitaminsVolumeMl}
             />
         ),
     };
@@ -314,9 +505,23 @@ export function OrderForm({
                             <button
                                 key={tab.key}
                                 type="button"
-                                onClick={() => setActiveTab(tab.key)}
+                                onClick={() => {
+                                    if (index <= currentTabIndex) {
+                                        setActiveTab(tab.key);
+                                        return;
+                                    }
+
+                                    const missingFields = getMissingRequiredFields(activeTab);
+
+                                    if (missingFields.length > 0) {
+                                        markRequiredFieldsAsAttempted(missingFields);
+                                        return;
+                                    }
+
+                                    setActiveTab(tab.key);
+                                }}
                                 className={[
-                                    'flex min-h-[76px] items-center gap-3 rounded-xl border px-4 py-3 text-left transition',
+                                    'flex min-h-[76px] items-center gap-3 rounded-xl border px-4 py-3 text-left transition cursor-pointer',
                                     isActive
                                         ? 'border-primary bg-primary text-primary-foreground shadow-sm'
                                         : isCompleted
@@ -367,11 +572,21 @@ export function OrderForm({
             </div>
 
             <div className="relative z-10 shrink-0 border-t border-border bg-background pt-4">
+                {getMissingRequiredFields(activeTab).some(
+                    (field) => attemptedRequiredFields[field],
+                ) ? (
+                    <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+                        Please complete the required fields before continuing.
+                    </div>
+                ) : null}
+                
                 <div className="flex flex-col gap-3 pb-1 sm:flex-row sm:items-center sm:justify-between">
+                    
                     <Button
                         variant="outline"
                         type="button"
                         onClick={onCancel}
+                        className="cursor-pointer"
                         disabled={isSubmitting}
                     >
                         Cancel
@@ -382,6 +597,7 @@ export function OrderForm({
                             <Button
                                 variant="outline"
                                 type="button"
+                                className="cursor-pointer"
                                 onClick={requestPreviousTab}
                                 disabled={isSubmitting}
                             >
@@ -393,6 +609,7 @@ export function OrderForm({
                             <Button
                                 type="button"
                                 onClick={handleSubmit}
+                                className="cursor-pointer"
                                 disabled={isSubmitting}
                             >
                                 {submitLabel}
@@ -401,6 +618,7 @@ export function OrderForm({
                             <Button
                                 type="button"
                                 onClick={requestNextTab}
+                                className="cursor-pointer"
                                 disabled={isSubmitting}
                             >
                                 Next
@@ -419,6 +637,8 @@ type SectionProps = {
         field: K,
         value: TpnOrderFormData[K],
     ) => void;
+    getFieldErrorClass?: (field: keyof TpnOrderFormData) => string;
+    getFieldErrorMessage?: (field: keyof TpnOrderFormData) => string | undefined;
 };
 
 type PatientInformationSectionProps = SectionProps & {
@@ -438,22 +658,32 @@ type ComputationSectionProps = SectionProps & {
     computedWeightKg: string;
     computedRateMlPerHour: string;
     proteinGramsPerDay: string;
+    proteinVolumeMl: string;
     dextroseGramsPerDay: string;
+    dextroseVolumeMl: string;
     gir: string;
     lipidGramsPerDay: string;
     lipidVolumeMl: string;
+    lipidBottleVolumeMl: string;
     lipidRateMlPerHour: string;
     sodiumMeqPerDay: string;
     potassiumMeqPerDay: string;
     calciumMgPerDay: string;
     magnesiumMeqPerDay: string;
     phosphorusMmolPerDay: string;
+    sodiumVolumeMl: string;
+    potassiumVolumeMl: string;
+    calciumVolumeMl: string;
+    magnesiumVolumeMl: string;
+    phosphorusVolumeMl: string;
     traceElementsMlPerDay: string;
-    heparinUnits: string;
+    traceElementsVolumeMl: string;
     dextroseCalories: string;
     proteinCalories: string;
     lipidCalories: string;
     totalNonProteinCaloriesPerKgDay: string;
+    qsVolumeMl: string;
+    multivitaminsVolumeMl: string;
 };
 
 type ReviewSectionProps = {
@@ -463,12 +693,15 @@ type ReviewSectionProps = {
     computedBmi: string;
     computedRateMlPerHour: string;
     proteinGramsPerDay: string;
+    proteinVolumeMl: string;
     proteinCalories: string;
     dextroseGramsPerDay: string;
+    dextroseVolumeMl: string;
     dextroseCalories: string;
     gir: string;
     lipidGramsPerDay: string;
     lipidVolumeMl: string;
+    lipidBottleVolumeMl: string;
     lipidRateMlPerHour: string;
     lipidCalories: string;
     sodiumMeqPerDay: string;
@@ -476,16 +709,96 @@ type ReviewSectionProps = {
     calciumMgPerDay: string;
     magnesiumMeqPerDay: string;
     phosphorusMmolPerDay: string;
+    sodiumVolumeMl: string;
+    potassiumVolumeMl: string;
+    calciumVolumeMl: string;
+    magnesiumVolumeMl: string;
+    phosphorusVolumeMl: string;
     traceElementsMlPerDay: string;
-    heparinUnits: string;
+    traceElementsVolumeMl: string;
     totalNonProteinCaloriesPerKgDay: string;
+    qsVolumeMl: string;
+    multivitaminsVolumeMl: string;
 };
+
+function formatVolumeDisplay(value: string): string {
+    const numericValue = Number(value);
+
+    if (!Number.isFinite(numericValue) || numericValue <= 0) {
+        return '';
+    }
+
+    return numericValue.toFixed(2);
+}
+
+function parseDateString(value: string | null | undefined): Date | undefined {
+    if (!value) {
+        return undefined;
+    }
+
+    const [year, month, day] = value.split('-').map(Number);
+
+    if (!year || !month || !day) {
+        return undefined;
+    }
+
+    return new Date(year, month - 1, day);
+}
+
+function formatDateForInput(date: Date | undefined): string {
+    if (!date) {
+        return '';
+    }
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
+}
+
+function formatDateForDisplay(value: string | null | undefined): string {
+    const date = parseDateString(value);
+
+    if (!date) {
+        return 'Select date of birth';
+    }
+
+    return date.toLocaleDateString('en-PH', {
+        year: 'numeric',
+        month: 'long',
+        day: '2-digit',
+    });
+}
 
 function PatientInformationSection({
     data,
     computedAge,
     updateField,
+    getFieldErrorClass,
+    getFieldErrorMessage,
 }: PatientInformationSectionProps) {
+    const [birthDateDialogOpen, setBirthDateDialogOpen] = useState(false);
+    const [draftBirthDate, setDraftBirthDate] = useState<Date | undefined>();
+
+    const selectedBirthDate = parseDateString(data.date_of_birth);
+
+    function openBirthDateDialog() {
+        setDraftBirthDate(selectedBirthDate);
+        setBirthDateDialogOpen(true);
+    }
+
+    function confirmBirthDate() {
+        updateField('date_of_birth', formatDateForInput(draftBirthDate));
+        setBirthDateDialogOpen(false);
+    }
+
+    function clearBirthDate() {
+        updateField('date_of_birth', '');
+        setDraftBirthDate(undefined);
+        setBirthDateDialogOpen(false);
+    }
+
     return (
         <Card className="rounded-lg border-border/80 shadow-sm">
             <CardHeader className="pb-4">
@@ -526,6 +839,8 @@ function PatientInformationSection({
                     <Field
                         label="Last Name"
                         htmlFor="last_name"
+                        required
+                        error={getFieldErrorMessage?.('last_name')}
                         style={{ gridColumn: 'span 3' }}
                     >
                         <Input
@@ -535,12 +850,15 @@ function PatientInformationSection({
                                 updateField('last_name', event.target.value)
                             }
                             placeholder="Last name"
+                            className={getFieldErrorClass?.('last_name')}
                         />
                     </Field>
 
                     <Field
                         label="First Name"
                         htmlFor="first_name"
+                        required
+                        error={getFieldErrorMessage?.('first_name')}
                         style={{ gridColumn: 'span 3' }}
                     >
                         <Input
@@ -550,6 +868,7 @@ function PatientInformationSection({
                                 updateField('first_name', event.target.value)
                             }
                             placeholder="First name"
+                            className={getFieldErrorClass?.('first_name')}
                         />
                     </Field>
 
@@ -606,17 +925,77 @@ function PatientInformationSection({
                         htmlFor="date_of_birth"
                         style={{ gridColumn: 'span 3' }}
                     >
-                        <Input
+                        <Button
                             id="date_of_birth"
-                            type="date"
-                            value={data.date_of_birth}
-                            onChange={(event) =>
-                                updateField(
-                                    'date_of_birth',
-                                    event.target.value,
-                                )
-                            }
-                        />
+                            type="button"
+                            variant="outline"
+                            className="h-10 w-full justify-between bg-background px-3 text-left font-normal"
+                            onClick={openBirthDateDialog}
+                        >
+                            <span
+                                className={
+                                    data.date_of_birth
+                                        ? 'truncate text-foreground'
+                                        : 'truncate text-muted-foreground'
+                                }
+                            >
+                                {formatDateForDisplay(data.date_of_birth)}
+                            </span>
+
+                            <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+
+                        <Dialog
+                            open={birthDateDialogOpen}
+                            onOpenChange={setBirthDateDialogOpen}
+                        >
+                            <DialogContent className="w-auto max-w-none p-0">
+                                <DialogHeader className="border-b px-5 py-4">
+                                    <DialogTitle>Select Date of Birth</DialogTitle>
+                                </DialogHeader>
+
+                                <div className="px-4 py-4">
+                                    <Calendar
+                                        mode="single"
+                                        selected={draftBirthDate}
+                                        onSelect={(date) => setDraftBirthDate(date)}
+                                        captionLayout="dropdown"
+                                        hideNavigation
+                                        startMonth={new Date(1900, 0)}
+                                        endMonth={new Date(new Date().getFullYear(), 11)}
+                                        disabled={(date) => date > new Date()}
+                                    />
+                                </div>
+
+                                <DialogFooter className="border-t px-5 py-4">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="cursor-pointer"
+                                        onClick={clearBirthDate}
+                                    >
+                                        Clear
+                                    </Button>
+
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="cursor-pointer"
+                                        onClick={() => setBirthDateDialogOpen(false)}
+                                    >
+                                        Cancel
+                                    </Button>
+
+                                    <Button 
+                                        type="button" 
+                                        className="cursor-pointer"
+                                        onClick={confirmBirthDate}
+                                    >
+                                        Apply
+                                    </Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
                     </Field>
 
                     <Field
@@ -754,6 +1133,8 @@ function ClinicalDetailsSection({
     computedWeightKg,
     computedBmi,
     updateField,
+    getFieldErrorClass,
+    getFieldErrorMessage,
 }: ClinicalDetailsSectionProps) {
     return (
         <Card className="rounded-lg border-border/80 shadow-sm">
@@ -789,19 +1170,19 @@ function ClinicalDetailsSection({
                     <Field
                         label="Current Weight by Kg"
                         htmlFor="current_weight_kg"
-                        style={{ gridColumn: 'span 4' }}
+                        required
+                        error={getFieldErrorMessage?.('current_weight_kg')}
+                        style={{ gridColumn: 'span 3' }}
                     >
                         <Input
                             id="current_weight_kg"
                             type="number"
                             value={data.current_weight_kg}
                             onChange={(event) =>
-                                updateField(
-                                    'current_weight_kg',
-                                    event.target.value,
-                                )
+                                updateField('current_weight_kg', event.target.value)
                             }
                             placeholder="0.00"
+                            className={getFieldErrorClass?.('current_weight_kg')}
                         />
                     </Field>
 
@@ -885,6 +1266,8 @@ function TpnRequirementsSection({
     data,
     computedRateMlPerHour,
     updateField,
+    getFieldErrorClass,
+    getFieldErrorMessage,
 }: TpnRequirementsSectionProps) {
     return (
         <Card className="rounded-lg border-border/80 shadow-sm">
@@ -901,6 +1284,8 @@ function TpnRequirementsSection({
                     <Field
                         label="Total Fluid by mL"
                         htmlFor="total_fluid_ml"
+                        required
+                        error={getFieldErrorMessage?.('total_fluid_ml')}
                         style={{ gridColumn: 'span 3' }}
                     >
                         <Input
@@ -908,18 +1293,18 @@ function TpnRequirementsSection({
                             type="number"
                             value={data.total_fluid_ml}
                             onChange={(event) =>
-                                updateField(
-                                    'total_fluid_ml',
-                                    event.target.value,
-                                )
+                                updateField('total_fluid_ml', event.target.value)
                             }
                             placeholder="0"
+                            className={getFieldErrorClass?.('total_fluid_ml')}
                         />
                     </Field>
 
                     <Field
                         label="Duration by Hours"
                         htmlFor="duration_hours"
+                        required
+                        error={getFieldErrorMessage?.('duration_hours')}
                         style={{ gridColumn: 'span 3' }}
                     >
                         <Input
@@ -927,12 +1312,10 @@ function TpnRequirementsSection({
                             type="number"
                             value={data.duration_hours}
                             onChange={(event) =>
-                                updateField(
-                                    'duration_hours',
-                                    event.target.value,
-                                )
+                                updateField('duration_hours', event.target.value)
                             }
                             placeholder="24"
+                            className={getFieldErrorClass?.('duration_hours')}
                         />
                     </Field>
 
@@ -991,22 +1374,32 @@ function ComputationSection({
     computedWeightKg,
     computedRateMlPerHour,
     proteinGramsPerDay,
+    proteinVolumeMl,
     dextroseGramsPerDay,
+    dextroseVolumeMl,
     gir,
     lipidGramsPerDay,
     lipidVolumeMl,
+    lipidBottleVolumeMl,
     lipidRateMlPerHour,
     sodiumMeqPerDay,
     potassiumMeqPerDay,
     calciumMgPerDay,
     magnesiumMeqPerDay,
     phosphorusMmolPerDay,
+    sodiumVolumeMl,
+    potassiumVolumeMl,
+    calciumVolumeMl,
+    magnesiumVolumeMl,
+    phosphorusVolumeMl,
     traceElementsMlPerDay,
-    heparinUnits,
+    traceElementsVolumeMl,
     dextroseCalories,
     proteinCalories,
     lipidCalories,
     totalNonProteinCaloriesPerKgDay,
+    qsVolumeMl,
+    multivitaminsVolumeMl,
     updateField,
 }: ComputationSectionProps) {
     return (
@@ -1016,7 +1409,7 @@ function ComputationSection({
                     <CardTitle>Macronutrients</CardTitle>
                     <CardDescription>
                         Encode protein, carbohydrate, and fat targets. The
-                        calculated contents and calories are shown immediately.
+                        calculated contents and volumes are shown immediately.
                     </CardDescription>
                 </CardHeader>
 
@@ -1045,9 +1438,9 @@ function ComputationSection({
                                     unit="g/day"
                                 />
                                 <ComputationLine
-                                    label="Calories"
-                                    value={proteinCalories}
-                                    unit="Cal/day"
+                                    label="Volume"
+                                    value={proteinVolumeMl}
+                                    unit="mL"
                                 />
                             </div>
                         </MacronutrientCard>
@@ -1080,9 +1473,9 @@ function ComputationSection({
                                     unit="g/day"
                                 />
                                 <ComputationLine
-                                    label="Calories"
-                                    value={dextroseCalories}
-                                    unit="Cal/day"
+                                    label="Volume"
+                                    value={dextroseVolumeMl}
+                                    unit="mL"
                                 />
                                 <ComputationLine
                                     label="GIR"
@@ -1170,14 +1563,14 @@ function ComputationSection({
                                     unit="mL"
                                 />
                                 <ComputationLine
+                                    label="Bottle Qty"
+                                    value={lipidBottleVolumeMl}
+                                    unit="mL"
+                                />
+                                <ComputationLine
                                     label="Rate"
                                     value={lipidRateMlPerHour}
                                     unit="mL/hr"
-                                />
-                                <ComputationLine
-                                    label="Calories"
-                                    value={lipidCalories}
-                                    unit="Cal/day"
                                 />
                             </div>
 
@@ -1248,8 +1641,8 @@ function ComputationSection({
                     </div>
 
                     <div className="mt-3 rounded-md border border-emerald-200 bg-white/70 px-4 py-2 text-sm text-emerald-900">
-                        Fat calories + Dextrose calories ÷ Weight Used = Total
-                        Non-Protein Calories
+                        ((Fat g/day × 9) + (Dextrose g/day × 3.4)) ÷ Weight Used =
+                        Total Non-Protein Calories
                     </div>
                 </CardContent>
             </Card>
@@ -1265,11 +1658,12 @@ function ComputationSection({
 
                 <CardContent>
                     <div className="overflow-hidden rounded-lg border border-border">
-                        <div className="grid grid-cols-[1.1fr_1.5fr_1fr_1.2fr] bg-[#0b5d0b] text-sm font-semibold text-white">
+                        <div className="grid grid-cols-[1.1fr_1.5fr_1fr_1.2fr_1fr] bg-[#0b5d0b] text-sm font-semibold text-white">
                             <div className="px-3 py-2">Electrolyte</div>
                             <div className="px-3 py-2">Dose</div>
                             <div className="px-3 py-2">Weight</div>
                             <div className="px-3 py-2">Result</div>
+                            <div className="px-3 py-2">Volume</div>
                         </div>
 
                         <ElectrolyteTableRow
@@ -1282,6 +1676,7 @@ function ComputationSection({
                             weight={computedWeightKg}
                             result={sodiumMeqPerDay}
                             resultUnit="meqs/day"
+                            volume={sodiumVolumeMl}
                         />
 
                         <ElectrolyteTableRow
@@ -1294,6 +1689,7 @@ function ComputationSection({
                             weight={computedWeightKg}
                             result={potassiumMeqPerDay}
                             resultUnit="meqs/day"
+                            volume={potassiumVolumeMl}
                         />
 
                         <ElectrolyteTableRow
@@ -1302,10 +1698,11 @@ function ComputationSection({
                             onDoseChange={(value) =>
                                 updateField('calcium_mg_kg_day', value)
                             }
-                            doseUnit="mg/kg/day"
+                            doseUnit="meqs/kg/day"
                             weight={computedWeightKg}
                             result={calciumMgPerDay}
-                            resultUnit="mg/day"
+                            resultUnit="meqs/day"
+                            volume={calciumVolumeMl}
                         />
 
                         <ElectrolyteTableRow
@@ -1318,6 +1715,7 @@ function ComputationSection({
                             weight={computedWeightKg}
                             result={magnesiumMeqPerDay}
                             resultUnit="meqs/day"
+                            volume={magnesiumVolumeMl}
                         />
 
                         <ElectrolyteTableRow
@@ -1330,6 +1728,7 @@ function ComputationSection({
                             weight={computedWeightKg}
                             result={phosphorusMmolPerDay}
                             resultUnit="mmol/day"
+                            volume={phosphorusVolumeMl}
                         />
                     </div>
                 </CardContent>
@@ -1339,7 +1738,7 @@ function ComputationSection({
                 <CardHeader className="pb-3">
                     <CardTitle>Additives</CardTitle>
                     <CardDescription>
-                        Encode trace elements, multivitamins, and heparin.
+                        Encode trace elements and multivitamins.
                     </CardDescription>
                 </CardHeader>
 
@@ -1365,13 +1764,13 @@ function ComputationSection({
                                         }
                                     />
                                     <span className="text-sm text-muted-foreground">
-                                        mL/kg/day x {computedWeightKg || '—'} kg
+                                        mL/kg/day
                                     </span>
                                 </div>
                             }
                             result={
                                 traceElementsMlPerDay
-                                    ? `${traceElementsMlPerDay} mL/day`
+                                    ? `${traceElementsMlPerDay} mL/day / ${traceElementsVolumeMl} mL`
                                     : '—'
                             }
                         />
@@ -1396,41 +1795,19 @@ function ComputationSection({
                             }
                             result={
                                 data.multivitamins_ml_day
-                                    ? `${data.multivitamins_ml_day} mL/day`
+                                    ? `${data.multivitamins_ml_day} mL/day / ${multivitaminsVolumeMl} mL`
                                     : '—'
                             }
                         />
 
                         <AdditiveTableRow
-                            label="Heparin"
+                            label="QS / Sterile Water"
                             input={
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <ComputationNumberInput
-                                        value={data.heparin_ml}
-                                        onChange={(value) =>
-                                            updateField('heparin_ml', value)
-                                        }
-                                    />
-                                    <span className="text-sm text-muted-foreground">
-                                        mL x
-                                    </span>
-                                    <ComputationNumberInput
-                                        value={data.heparin_units_per_ml}
-                                        onChange={(value) =>
-                                            updateField(
-                                                'heparin_units_per_ml',
-                                                value,
-                                            )
-                                        }
-                                    />
-                                    <span className="text-sm text-muted-foreground">
-                                        I.U./mL
-                                    </span>
-                                </div>
+                                <span className="text-sm text-muted-foreground">
+                                    Total fluid minus all ingredient volumes
+                                </span>
                             }
-                            result={
-                                heparinUnits ? `${heparinUnits} I.U.` : '—'
-                            }
+                            result={qsVolumeMl ? `${qsVolumeMl} mL` : '—'}
                         />
                     </div>
                 </CardContent>
@@ -1571,6 +1948,7 @@ function ElectrolyteTableRow({
     weight,
     result,
     resultUnit,
+    volume,
 }: {
     label: string;
     dose: string;
@@ -1579,9 +1957,10 @@ function ElectrolyteTableRow({
     weight: string;
     result: string;
     resultUnit: string;
+    volume: string;
 }) {
     return (
-        <div className="grid grid-cols-[1.1fr_1.5fr_1fr_1.2fr] border-t border-border bg-background">
+        <div className="grid grid-cols-[1.1fr_1.5fr_1fr_1.2fr_1fr] border-t border-border bg-background">
             <div className="px-3 py-2 text-sm font-semibold text-[#0b5d0b]">
                 {label}
             </div>
@@ -1604,6 +1983,10 @@ function ElectrolyteTableRow({
 
             <div className="px-3 py-2 text-sm font-medium">
                 {result ? `${result} ${resultUnit}` : '—'}
+            </div>
+
+            <div className="px-3 py-2 text-sm font-medium">
+                {volume ? `${volume} mL` : '—'}
             </div>
         </div>
     );
@@ -1658,12 +2041,15 @@ function ReviewSection({
     computedBmi,
     computedRateMlPerHour,
     proteinGramsPerDay,
+    proteinVolumeMl,
     proteinCalories,
     dextroseGramsPerDay,
+    dextroseVolumeMl,
     dextroseCalories,
     gir,
     lipidGramsPerDay,
     lipidVolumeMl,
+    lipidBottleVolumeMl,
     lipidRateMlPerHour,
     lipidCalories,
     sodiumMeqPerDay,
@@ -1671,9 +2057,16 @@ function ReviewSection({
     calciumMgPerDay,
     magnesiumMeqPerDay,
     phosphorusMmolPerDay,
+    sodiumVolumeMl,
+    potassiumVolumeMl,
+    calciumVolumeMl,
+    magnesiumVolumeMl,
+    phosphorusVolumeMl,
     traceElementsMlPerDay,
-    heparinUnits,
+    traceElementsVolumeMl,
     totalNonProteinCaloriesPerKgDay,
+    qsVolumeMl,
+    multivitaminsVolumeMl,
 }: ReviewSectionProps) {
     const patientName = getPatientName(data);
 
@@ -1790,12 +2183,8 @@ function ReviewSection({
                                 }
                             />
                             <ReviewRow
-                                label="Calories"
-                                value={
-                                    proteinCalories
-                                        ? `${proteinCalories} Cal/day`
-                                        : ''
-                                }
+                                label="Volume"
+                                value={proteinVolumeMl ? `${proteinVolumeMl} mL` : ''}
                             />
                         </div>
 
@@ -1821,12 +2210,8 @@ function ReviewSection({
                                 }
                             />
                             <ReviewRow
-                                label="Calories"
-                                value={
-                                    dextroseCalories
-                                        ? `${dextroseCalories} Cal/day`
-                                        : ''
-                                }
+                                label="Volume"
+                                value={dextroseVolumeMl ? `${dextroseVolumeMl} mL` : ''}
                             />
                             <ReviewRow
                                 label="GIR"
@@ -1860,18 +2245,14 @@ function ReviewSection({
                                 value={lipidVolumeMl ? `${lipidVolumeMl} mL` : ''}
                             />
                             <ReviewRow
+                                label="Bottle Qty"
+                                value={lipidBottleVolumeMl ? `${lipidBottleVolumeMl} mL` : ''}
+                            />
+                            <ReviewRow
                                 label="Rate"
                                 value={
                                     lipidRateMlPerHour
                                         ? `${lipidRateMlPerHour} mL/hr`
-                                        : ''
-                                }
-                            />
-                            <ReviewRow
-                                label="Calories"
-                                value={
-                                    lipidCalories
-                                        ? `${lipidCalories} Cal/day`
                                         : ''
                                 }
                             />
@@ -1886,33 +2267,44 @@ function ReviewSection({
                         <div className="grid gap-3 lg:grid-cols-2">
                             <ReviewRow
                                 label="Sodium"
-                                value={sodiumMeqPerDay ? `${sodiumMeqPerDay} meqs/day` : ''}
+                                value={
+                                    sodiumMeqPerDay
+                                        ? `${sodiumMeqPerDay} meqs/day${sodiumVolumeMl ? ` / ${sodiumVolumeMl} mL` : ''}`
+                                        : ''
+                                }
                             />
                             <ReviewRow
                                 label="Potassium"
                                 value={
                                     potassiumMeqPerDay
-                                        ? `${potassiumMeqPerDay} meqs/day`
+                                        ? `${potassiumMeqPerDay} meqs/day${potassiumVolumeMl ? ` / ${potassiumVolumeMl} mL` : ''}`
                                         : ''
                                 }
                             />
+
                             <ReviewRow
                                 label="Calcium"
-                                value={calciumMgPerDay ? `${calciumMgPerDay} mg/day` : ''}
+                                value={
+                                    calciumMgPerDay
+                                        ? `${calciumMgPerDay} meqs/day${calciumVolumeMl ? ` / ${calciumVolumeMl} mL` : ''}`
+                                        : ''
+                                }
                             />
+
                             <ReviewRow
                                 label="Magnesium"
                                 value={
                                     magnesiumMeqPerDay
-                                        ? `${magnesiumMeqPerDay} meqs/day`
+                                        ? `${magnesiumMeqPerDay} meqs/day${magnesiumVolumeMl ? ` / ${magnesiumVolumeMl} mL` : ''}`
                                         : ''
                                 }
                             />
+
                             <ReviewRow
                                 label="Phosphorus"
                                 value={
                                     phosphorusMmolPerDay
-                                        ? `${phosphorusMmolPerDay} mmol/day`
+                                        ? `${phosphorusMmolPerDay} mmol/day${phosphorusVolumeMl ? ` / ${phosphorusVolumeMl} mL` : ''}`
                                         : ''
                                 }
                             />
@@ -1920,7 +2312,7 @@ function ReviewSection({
                                 label="Trace Elements"
                                 value={
                                     traceElementsMlPerDay
-                                        ? `${traceElementsMlPerDay} mL/day`
+                                        ? `${traceElementsMlPerDay} mL/day${traceElementsVolumeMl ? ` / ${traceElementsVolumeMl} mL` : ''}`
                                         : ''
                                 }
                             />
@@ -1928,13 +2320,13 @@ function ReviewSection({
                                 label="Multivitamins"
                                 value={
                                     data.multivitamins_ml_day
-                                        ? `${data.multivitamins_ml_day} mL/day`
+                                        ? `${data.multivitamins_ml_day} mL/day${multivitaminsVolumeMl ? ` / ${multivitaminsVolumeMl} mL` : ''}`
                                         : ''
                                 }
                             />
                             <ReviewRow
-                                label="Heparin"
-                                value={heparinUnits ? `${heparinUnits} I.U.` : ''}
+                                label="QS / Sterile Water"
+                                value={qsVolumeMl ? `${qsVolumeMl} mL` : ''}
                             />
                         </div>
                     </div>
@@ -1992,28 +2384,32 @@ function Grid({ children }: { children: ReactNode }) {
 function Field({
     label,
     htmlFor,
-    className = '',
-    style,
     children,
+    style,
+    required = false,
+    error,
 }: {
     label: string;
-    htmlFor: string;
-    className?: string;
-    style?: CSSProperties;
+    htmlFor?: string;
     children: ReactNode;
+    style?: CSSProperties;
+    required?: boolean;
+    error?: string;
 }) {
     return (
-        <div
-            className={`grid min-w-0 content-start gap-2 ${className}`}
-            style={style}
-        >
-            <Label
-                htmlFor={htmlFor}
-                className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground"
-            >
+        <div className="grid gap-2" style={style}>
+            <Label htmlFor={htmlFor}>
                 {label}
+                {required ? (
+                    <span className="ml-1 text-red-600">*</span>
+                ) : null}
             </Label>
+
             {children}
+
+            {error ? (
+                <p className="text-xs font-medium text-red-600">{error}</p>
+            ) : null}
         </div>
     );
 }

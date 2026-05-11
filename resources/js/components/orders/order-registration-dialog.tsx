@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 
 import { OrderForm } from '@/components/orders/order-form';
-import ConfirmationDialog from '@/components/ui/confirmation-dialog';
+import ConfirmationDialog from '../ui/confirmation-dialog';
 import {
     Dialog,
     DialogContent,
@@ -37,11 +37,17 @@ export function OrderRegistrationDialog({
     const [pendingData, setPendingData] = useState<TpnOrderFormData | null>(
         null,
     );
+    const isEditing = Boolean(initialData?.id);
 
     function submitOrder(data: TpnOrderFormData) {
         setIsSubmitting(true);
 
-        router.post('/orders', data, {
+        const submit = isEditing
+            ? router.put.bind(router)
+            : router.post.bind(router);
+        const url = isEditing ? `/orders/${initialData?.id}` : '/orders';
+
+        submit(url, data, {
             preserveScroll: true,
             onSuccess: () => {
                 setConfirmationOpen(false);
@@ -105,11 +111,21 @@ export function OrderRegistrationDialog({
 
             <ConfirmationDialog
                 open={confirmationOpen}
-                title="Submit this TPN order for review?"
-                description="Please confirm that the patient details, requirements, and computations are correct before submitting."
-                confirmLabel={isSubmitting ? 'Submitting...' : 'Submit'}
+                title={
+                    isEditing
+                        ? 'Save changes to this TPN order?'
+                        : 'Submit this TPN order for review?'
+                }
+                description="Please confirm that the patient details, requirements, and computations are correct before saving."
+                confirmLabel={
+                    isSubmitting
+                        ? 'Saving...'
+                        : isEditing
+                          ? 'Save Changes'
+                          : 'Submit'
+                }
                 cancelLabel="Review Again"
-                onOpenChange={(nextOpen) => {
+                onOpenChange={(nextOpen: boolean) => {
                     if (isSubmitting) {
                         return;
                     }

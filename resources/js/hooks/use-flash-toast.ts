@@ -1,19 +1,37 @@
-import { router } from '@inertiajs/react';
-import { useEffect } from 'react';
+import { usePage } from '@inertiajs/react';
+import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
-import type { FlashToast } from '@/types/ui';
+
+type FlashToast = {
+    type: 'success' | 'error' | 'warning' | 'info';
+    message: string;
+};
+
+type SharedProps = {
+    flash?: {
+        toast?: FlashToast | null;
+    };
+};
 
 export function useFlashToast(): void {
+    const { flash } = usePage<SharedProps>().props;
+    const lastMessage = useRef<string | null>(null);
+
     useEffect(() => {
-        return router.on('flash', (event) => {
-            const flash = (event as CustomEvent).detail?.flash;
-            const data = flash?.toast as FlashToast | undefined;
+        const data = flash?.toast;
 
-            if (!data) {
-                return;
-            }
+        if (!data?.message) {
+            return;
+        }
 
-            toast[data.type](data.message);
-        });
-    }, []);
+        const key = `${data.type}:${data.message}`;
+
+        if (lastMessage.current === key) {
+            return;
+        }
+
+        lastMessage.current = key;
+
+        toast[data.type](data.message);
+    }, [flash?.toast]);
 }

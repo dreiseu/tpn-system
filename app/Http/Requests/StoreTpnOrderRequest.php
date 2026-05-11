@@ -58,9 +58,7 @@ class StoreTpnOrderRequest extends FormRequest
 
             'trace_elements_ml_kg_day' => $this->nullIfEmpty($this->input('trace_elements_ml_kg_day')),
             'multivitamins_ml_day' => $this->nullIfEmpty($this->input('multivitamins_ml_day')),
-            'heparin_ml' => $this->nullIfEmpty($this->input('heparin_ml')),
-            'heparin_units_per_ml' => $this->nullIfEmpty($this->input('heparin_units_per_ml')),
-
+           
             'osmolarity_notes' => $this->nullIfEmpty($this->input('osmolarity_notes')),
         ]);
     }
@@ -114,9 +112,7 @@ class StoreTpnOrderRequest extends FormRequest
 
             'trace_elements_ml_kg_day' => ['nullable', 'numeric', 'min:0'],
             'multivitamins_ml_day' => ['nullable', 'numeric', 'min:0'],
-            'heparin_ml' => ['nullable', 'numeric', 'min:0'],
-            'heparin_units_per_ml' => ['nullable', 'numeric', 'min:0'],
-
+           
             'osmolarity_notes' => ['nullable', 'string'],
         ];
     }

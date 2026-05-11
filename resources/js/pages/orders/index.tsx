@@ -1,14 +1,18 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import {
     ClipboardList,
+    Download,
+    Eye,
     Filter,
+    MoreHorizontal,
     Pencil,
     Plus,
     Search,
     Trash2,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
+import { OrderExportSheet } from '@/components/orders/order-export-sheet';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -36,9 +40,29 @@ import {
     type TpnOrderStatus,
 } from '@/types/orders';
 
+import {
+    Pagination,
+    PaginationContent,
+    PaginationEllipsis,
+    PaginationItem,
+    PaginationLink,
+    PaginationNext,
+    PaginationPrevious,
+} from '@/components/ui/pagination';
+
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+
 type OrdersIndexProps = {
     orders?: TpnOrder[];
 };
+
+const ITEMS_PER_PAGE = 5;
 
 export default function OrdersIndex({
     orders = initialOrders,
@@ -47,27 +71,48 @@ export default function OrdersIndex({
     const [status, setStatus] = useState<TpnOrderStatus | 'All'>('All');
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editingOrder, setEditingOrder] = useState<TpnOrder | null>(null);
+    const [exportingOrder, setExportingOrder] = useState<TpnOrder | null>(null);
+
+    const [currentPage, setCurrentPage] = useState(1);
 
     const filteredOrders = useMemo(() => {
         const normalizedQuery = query.trim().toLowerCase();
 
         return orders.filter((order) => {
-            const matchesStatus = status === 'All' || order.status === status;
-            const searchable = [
-                order.order_no,
-                order.hospital_number,
-                getPatientName(order),
-                order.ward,
-                order.room,
-                order.prescribing_physician,
-                order.status,
-            ]
-                .join(' ')
-                .toLowerCase();
+            const patientName = getPatientName(order).toLowerCase();
 
-            return matchesStatus && searchable.includes(normalizedQuery);
+            const matchesQuery =
+                normalizedQuery === '' ||
+                order.order_no.toLowerCase().includes(normalizedQuery) ||
+                patientName.includes(normalizedQuery) ||
+                order.hospital_number.toLowerCase().includes(normalizedQuery);
+
+            const matchesStatus =
+                status === 'All' ||
+                String(order.status ?? '').toLowerCase() ===
+                    String(status).toLowerCase();
+
+            return matchesQuery && matchesStatus;
         });
     }, [orders, query, status]);
+
+    const totalPages = Math.max(
+        1,
+        Math.ceil(filteredOrders.length / ITEMS_PER_PAGE),
+    );
+
+    const safeCurrentPage = Math.min(currentPage, totalPages);
+
+    const paginatedOrders = filteredOrders.slice(
+        (safeCurrentPage - 1) * ITEMS_PER_PAGE,
+        safeCurrentPage * ITEMS_PER_PAGE,
+    );
+
+    const emptyRows = Math.max(0, ITEMS_PER_PAGE - paginatedOrders.length);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [query, status]);
 
     function handleCreate() {
         setEditingOrder(null);
@@ -75,9 +120,8 @@ export default function OrdersIndex({
     }
 
     function handleEdit(order: TpnOrder) {
-        window.alert(
-            `Edit is not connected to the database yet for ${order.order_no} (${getPatientName(order)}).`,
-        );
+        setEditingOrder(order);
+        setDialogOpen(true);
     }
 
     function handleDelete(order: TpnOrder) {
@@ -86,15 +130,24 @@ export default function OrdersIndex({
         );
     }
 
+    function handleShow(order: TpnOrder) {
+        router.visit(`/orders/${order.id}`);
+    }
+
+    function handleExport(order: TpnOrder) {
+        setExportingOrder(order);
+        window.setTimeout(() => window.print(), 100);
+    }
+
     return (
         <>
-            <Head title="TPN Orders" />
+            <Head title="Orders" />
 
             <div className="emr-content-surface flex flex-1 flex-col gap-6 p-4 md:p-6">
                 <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                     <div>
                         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-                            TPN Orders
+                            Orders
                         </h1>
                         <p className="text-sm text-slate-500">
                             Search and review parenteral nutrition orders before
@@ -103,7 +156,7 @@ export default function OrdersIndex({
                     </div>
 
                     <Button
-                        className="bg-[#2f7d32] text-white hover:bg-[#27692a]"
+                        className="cursor-pointer bg-[#2f7d32] text-white hover:bg-[#27692a]"
                         onClick={handleCreate}
                     >
                         <Plus className="mr-2 h-4 w-4" />
@@ -146,7 +199,7 @@ export default function OrdersIndex({
                                         )
                                     }
                                 >
-                                    <SelectTrigger className="w-full sm:w-[210px]">
+                                    <SelectTrigger className="w-full cursor-pointer sm:w-[210px]">
                                         <Filter className="mr-2 h-4 w-4 text-slate-400" />
                                         <SelectValue placeholder="Filter status" />
                                     </SelectTrigger>
@@ -155,6 +208,7 @@ export default function OrdersIndex({
                                             <SelectItem
                                                 key={option}
                                                 value={option}
+                                                className="cursor-pointer"
                                             >
                                                 {option === 'All'
                                                     ? 'All Statuses'
@@ -182,24 +236,27 @@ export default function OrdersIndex({
                                             Hospital No.
                                         </th>
                                         <th className="px-5 py-3 font-semibold">
-                                            Location
+                                            Date of Birth
                                         </th>
-                                        <th className="px-5 py-3 font-semibold">
-                                            Physician
+                                        <th className="px-5 py-3 text-center font-semibold">
+                                            Sex
+                                        </th>
+                                        <th className="px-5 py-3 text-center font-semibold">
+                                            Current Weight
+                                        </th>
+                                        <th className="px-5 py-3 text-center font-semibold">
+                                            Ward
                                         </th>
                                         <th className="px-5 py-3 font-semibold">
                                             Order Date
                                         </th>
-                                        <th className="px-5 py-3 font-semibold">
-                                            Status
-                                        </th>
-                                        <th className="px-5 py-3 text-right font-semibold">
+                                        <th className="px-5 py-3 text-center font-semibold">
                                             Actions
                                         </th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-200">
-                                    {filteredOrders.map((order) => (
+                                    {paginatedOrders.map((order) => (
                                         <tr
                                             key={order.id}
                                             className="transition hover:bg-slate-50"
@@ -225,55 +282,99 @@ export default function OrdersIndex({
                                                 {order.hospital_number || 'N/A'}
                                             </td>
                                             <td className="px-5 py-4 text-slate-700">
+                                                {order.date_of_birth || 'N/A'}
+                                            </td>
+                                            <td className="px-5 py-4 text-center text-slate-700">
+                                                {order.sex || 'N/A'}
+                                            </td>
+                                            <td className="px-5 py-4 text-center text-slate-700">
+                                                {order.current_weight_kg ||
+                                                order.birth_weight_kg
+                                                    ? `${order.current_weight_kg || order.birth_weight_kg} kg`
+                                                    : 'N/A'}
+                                            </td>
+                                            <td className="px-5 py-4 text-center text-slate-700">
                                                 {[order.ward, order.room]
                                                     .filter(Boolean)
                                                     .join(' / ') || 'N/A'}
                                             </td>
                                             <td className="px-5 py-4 text-slate-700">
-                                                {order.prescribing_physician ||
-                                                    'N/A'}
-                                            </td>
-                                            <td className="px-5 py-4 text-slate-700">
                                                 {order.order_date}
                                             </td>
-                                            <td className="px-5 py-4">
-                                                <Badge
-                                                    variant="outline"
-                                                    className={getStatusClass(
-                                                        order.status,
-                                                    )}
-                                                >
-                                                    {order.status}
-                                                </Badge>
-                                            </td>
-                                            <td className="px-5 py-4">
-                                                <div className="flex justify-end gap-2">
-                                                    <Button
-                                                        variant="outline"
-                                                        size="icon"
-                                                        className="h-9 w-9"
-                                                        onClick={() =>
-                                                            handleEdit(order)
-                                                        }
-                                                    >
-                                                        <Pencil className="h-4 w-4" />
-                                                        <span className="sr-only">
-                                                            Edit order
-                                                        </span>
-                                                    </Button>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="icon"
-                                                        className="h-9 w-9 border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
-                                                        onClick={() =>
-                                                            handleDelete(order)
-                                                        }
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                        <span className="sr-only">
-                                                            Delete order
-                                                        </span>
-                                                    </Button>
+                                            <td className="px-5 py-4 text-center">
+                                                <div className="flex justify-center">
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger
+                                                            asChild
+                                                        >
+                                                            <Button
+                                                                variant="outline"
+                                                                size="icon"
+                                                                className="h-9 w-9 cursor-pointer"
+                                                                aria-label="Open order actions"
+                                                            >
+                                                                <MoreHorizontal className="h-4 w-4" />
+                                                                <span className="sr-only">
+                                                                    Open actions
+                                                                </span>
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+
+                                                        <DropdownMenuContent
+                                                            align="end"
+                                                            className="w-44"
+                                                        >
+                                                            <DropdownMenuItem
+                                                                className="cursor-pointer"
+                                                                onClick={() =>
+                                                                    handleShow(
+                                                                        order,
+                                                                    )
+                                                                }
+                                                            >
+                                                                <Eye className="mr-2 h-4 w-4" />
+                                                                Show
+                                                            </DropdownMenuItem>
+
+                                                            <DropdownMenuItem
+                                                                className="cursor-pointer"
+                                                                onClick={() =>
+                                                                    handleEdit(
+                                                                        order,
+                                                                    )
+                                                                }
+                                                            >
+                                                                <Pencil className="mr-2 h-4 w-4" />
+                                                                Edit
+                                                            </DropdownMenuItem>
+
+                                                            <DropdownMenuItem
+                                                                className="cursor-pointer"
+                                                                onClick={() =>
+                                                                    handleExport(
+                                                                        order,
+                                                                    )
+                                                                }
+                                                            >
+                                                                <Download className="mr-2 h-4 w-4" />
+                                                                Export
+                                                            </DropdownMenuItem>
+
+                                                            <DropdownMenuSeparator />
+
+                                                            <DropdownMenuItem
+                                                                className="cursor-pointer text-red-600 focus:bg-red-50 focus:text-red-700"
+                                                                onClick={() =>
+                                                                    handleDelete(
+                                                                        order,
+                                                                    )
+                                                                }
+                                                            >
+                                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                                Delete
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
                                                 </div>
                                             </td>
                                         </tr>
@@ -283,29 +384,183 @@ export default function OrdersIndex({
                                         <tr>
                                             <td
                                                 colSpan={8}
-                                                className="py-10 text-center text-sm text-slate-500"
+                                                className="h-[544px] text-center text-sm text-slate-500"
                                             >
-                                                No TPN orders match your search
-                                                or filter.
+                                                No orders match your search or
+                                                filter.
                                             </td>
                                         </tr>
                                     ) : null}
+
+                                    {filteredOrders.length > 0
+                                        ? Array.from({ length: emptyRows }).map(
+                                              (_, index) => (
+                                                  <tr
+                                                      key={`empty-row-${index}`}
+                                                      className="h-[68px]"
+                                                      aria-hidden="true"
+                                                  >
+                                                      <td
+                                                          colSpan={8}
+                                                          className="border-b border-slate-100"
+                                                      >
+                                                          &nbsp;
+                                                      </td>
+                                                  </tr>
+                                              ),
+                                          )
+                                        : null}
                                 </tbody>
                             </table>
                         </div>
+
+                        {filteredOrders.length > ITEMS_PER_PAGE ? (
+                            <div className="mt-6 flex flex-col gap-3 border-t border-border/80 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="text-sm text-muted-foreground">
+                                    Showing{' '}
+                                    <span className="font-medium text-foreground">
+                                        {(safeCurrentPage - 1) *
+                                            ITEMS_PER_PAGE +
+                                            1}
+                                    </span>{' '}
+                                    to{' '}
+                                    <span className="font-medium text-foreground">
+                                        {Math.min(
+                                            safeCurrentPage * ITEMS_PER_PAGE,
+                                            filteredOrders.length,
+                                        )}
+                                    </span>{' '}
+                                    of{' '}
+                                    <span className="font-medium text-foreground">
+                                        {filteredOrders.length}
+                                    </span>{' '}
+                                    orders
+                                </div>
+
+                                <Pagination className="mx-0 w-auto justify-end">
+                                    <PaginationContent>
+                                        <PaginationItem>
+                                            <PaginationPrevious
+                                                href="#"
+                                                onClick={(event) => {
+                                                    event.preventDefault();
+
+                                                    if (safeCurrentPage > 1) {
+                                                        setCurrentPage(
+                                                            safeCurrentPage - 1,
+                                                        );
+                                                    }
+                                                }}
+                                                className={
+                                                    safeCurrentPage === 1
+                                                        ? 'pointer-events-none opacity-50'
+                                                        : ''
+                                                }
+                                            />
+                                        </PaginationItem>
+
+                                        {Array.from({ length: totalPages }).map(
+                                            (_, index) => {
+                                                const page = index + 1;
+
+                                                if (
+                                                    totalPages > 7 &&
+                                                    page !== 1 &&
+                                                    page !== totalPages &&
+                                                    Math.abs(
+                                                        page - safeCurrentPage,
+                                                    ) > 1
+                                                ) {
+                                                    if (
+                                                        page === 2 ||
+                                                        page === totalPages - 1
+                                                    ) {
+                                                        return (
+                                                            <PaginationItem
+                                                                key={page}
+                                                            >
+                                                                <PaginationEllipsis />
+                                                            </PaginationItem>
+                                                        );
+                                                    }
+
+                                                    return null;
+                                                }
+
+                                                return (
+                                                    <PaginationItem key={page}>
+                                                        <PaginationLink
+                                                            href="#"
+                                                            isActive={
+                                                                page ===
+                                                                safeCurrentPage
+                                                            }
+                                                            onClick={(
+                                                                event,
+                                                            ) => {
+                                                                event.preventDefault();
+                                                                setCurrentPage(
+                                                                    page,
+                                                                );
+                                                            }}
+                                                        >
+                                                            {page}
+                                                        </PaginationLink>
+                                                    </PaginationItem>
+                                                );
+                                            },
+                                        )}
+
+                                        <PaginationItem>
+                                            <PaginationNext
+                                                href="#"
+                                                onClick={(event) => {
+                                                    event.preventDefault();
+
+                                                    if (
+                                                        safeCurrentPage <
+                                                        totalPages
+                                                    ) {
+                                                        setCurrentPage(
+                                                            safeCurrentPage + 1,
+                                                        );
+                                                    }
+                                                }}
+                                                className={
+                                                    safeCurrentPage ===
+                                                    totalPages
+                                                        ? 'pointer-events-none opacity-50'
+                                                        : ''
+                                                }
+                                            />
+                                        </PaginationItem>
+                                    </PaginationContent>
+                                </Pagination>
+                            </div>
+                        ) : null}
                     </CardContent>
                 </Card>
             </div>
 
             <OrderRegistrationDialog
                 open={dialogOpen}
-                onOpenChange={setDialogOpen}
+                onOpenChange={(open) => {
+                    setDialogOpen(open);
+
+                    if (!open) {
+                        setEditingOrder(null);
+                    }
+                }}
                 initialData={editingOrder ?? undefined}
                 title={editingOrder ? 'Edit TPN Order' : 'New TPN Order'}
                 submitLabel={
                     editingOrder ? 'Save Changes' : 'Submit for Review'
                 }
             />
+
+            {exportingOrder ? (
+                <OrderExportSheet order={exportingOrder} />
+            ) : null}
         </>
     );
 }
@@ -313,7 +568,7 @@ export default function OrdersIndex({
 OrdersIndex.layout = {
     breadcrumbs: [
         {
-            title: 'TPN Orders',
+            title: 'Orders',
             href: '/orders',
         },
     ],
