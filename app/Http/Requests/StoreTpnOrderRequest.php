@@ -58,8 +58,17 @@ class StoreTpnOrderRequest extends FormRequest
 
             'trace_elements_ml_kg_day' => $this->nullIfEmpty($this->input('trace_elements_ml_kg_day')),
             'multivitamins_ml_day' => $this->nullIfEmpty($this->input('multivitamins_ml_day')),
-           
+            'heparin_ml' => $this->nullIfEmpty($this->input('heparin_ml')),
+            'heparin_iu_per_ml' => $this->nullIfEmpty($this->input('heparin_iu_per_ml')),
+            'sterile_water_level_ml_day' => $this->nullIfEmpty($this->input('sterile_water_level_ml_day', $this->input('sterile_water_ml_day'))),
+
             'osmolarity_notes' => $this->nullIfEmpty($this->input('osmolarity_notes')),
+            'osmolarity_inputs_json' => $this->normalizeOsmolarityInputsJson(
+                $this->input('osmolarity_inputs_json'),
+            ),
+            'osmolarity_computed_mosm_l' => $this->nullIfEmpty(
+                $this->input('osmolarity_computed_mosm_l'),
+            ),
         ]);
     }
 
@@ -112,8 +121,13 @@ class StoreTpnOrderRequest extends FormRequest
 
             'trace_elements_ml_kg_day' => ['nullable', 'numeric', 'min:0'],
             'multivitamins_ml_day' => ['nullable', 'numeric', 'min:0'],
-           
+            'heparin_ml' => ['nullable', 'numeric', 'min:0'],
+            'heparin_iu_per_ml' => ['nullable', 'numeric', 'min:0'],
+            'sterile_water_level_ml_day' => ['nullable', 'numeric', 'min:0'],
+
             'osmolarity_notes' => ['nullable', 'string'],
+            'osmolarity_inputs_json' => ['nullable', 'string'],
+            'osmolarity_computed_mosm_l' => ['nullable', 'numeric', 'min:0'],
         ];
     }
 
@@ -129,6 +143,31 @@ class StoreTpnOrderRequest extends FormRequest
             'duration_hours.required' => 'Duration is required.',
             'duration_hours.min' => 'Duration must be greater than zero.',
         ];
+    }
+
+    private function normalizeOsmolarityInputsJson(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (is_array($value)) {
+            return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+
+        if (is_string($value)) {
+            $trimmed = trim($value);
+
+            if ($trimmed === '') {
+                return null;
+            }
+
+            json_decode($trimmed);
+
+            return json_last_error() === JSON_ERROR_NONE ? $trimmed : null;
+        }
+
+        return null;
     }
 
     private function nullIfEmpty(mixed $value): mixed

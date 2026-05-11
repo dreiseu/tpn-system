@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import {
+    useEffect,
+    useMemo,
+    useState,
+    type CSSProperties,
+    type ReactNode,
+} from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -41,11 +47,17 @@ import {
     calculateProteinCalories,
     calculateRateMlPerHour,
     calculateTotalNonProteinCaloriesPerKgDay,
+    calculateGlobalRphStyleOsmolarity,
     getPatientName,
     initialOrderFormData,
     orderTabs,
     resolveWeightForComputation,
     calculateQsVolumeMl,
+    osmolarityPpnSolutionOptions,
+    osmolarityLockTotalVolumeOptions,
+    osmolarityDextroseConcentrationOptions,
+    osmolarityTpnMacronutrientFields,
+    osmolarityAdditiveFields,
     type OrderTabKey,
     type TpnOrder,
     type TpnOrderFormData,
@@ -116,11 +128,14 @@ export function OrderForm({
     }, [data.total_fluid_ml, data.duration_hours]);
 
     const proteinGramsPerDay = useMemo(() => {
-        return calculatePerKgPerDay(data.protein_g_per_kg_day, computedWeightKg);
+        return calculatePerKgPerDay(
+            data.protein_g_per_kg_day,
+            computedWeightKg,
+        );
     }, [data.protein_g_per_kg_day, computedWeightKg]);
 
     const proteinVolumeMl = useMemo(() => {
-        return calculateProteinVolumeMl(proteinGramsPerDay)
+        return calculateProteinVolumeMl(proteinGramsPerDay);
     }, [proteinGramsPerDay]);
 
     const dextroseGramsPerDay = useMemo(() => {
@@ -169,7 +184,10 @@ export function OrderForm({
     }, [data.sodium_meq_kg_day, computedWeightKg]);
 
     const potassiumMeqPerDay = useMemo(() => {
-        return calculatePerKgPerDay(data.potassium_meq_kg_day, computedWeightKg);
+        return calculatePerKgPerDay(
+            data.potassium_meq_kg_day,
+            computedWeightKg,
+        );
     }, [data.potassium_meq_kg_day, computedWeightKg]);
 
     const calciumMgPerDay = useMemo(() => {
@@ -180,11 +198,17 @@ export function OrderForm({
     }, [data.calcium_mg_kg_day, computedWeightKg]);
 
     const magnesiumMeqPerDay = useMemo(() => {
-        return calculatePerKgPerDay(data.magnesium_meq_kg_day, computedWeightKg);
+        return calculatePerKgPerDay(
+            data.magnesium_meq_kg_day,
+            computedWeightKg,
+        );
     }, [data.magnesium_meq_kg_day, computedWeightKg]);
 
     const phosphorusMmolPerDay = useMemo(() => {
-        return calculatePerKgPerDay(data.phosphorus_mmol_kg_day, computedWeightKg);
+        return calculatePerKgPerDay(
+            data.phosphorus_mmol_kg_day,
+            computedWeightKg,
+        );
     }, [data.phosphorus_mmol_kg_day, computedWeightKg]);
 
     const sodiumVolumeMl = useMemo(() => {
@@ -239,6 +263,13 @@ export function OrderForm({
         return formatVolumeDisplay(data.multivitamins_ml_day);
     }, [data.multivitamins_ml_day]);
 
+    const heparinTotalIu = useMemo(() => {
+        const ml = Number(data.heparin_ml) || 0;
+        const iuPerMl = Number(data.heparin_iu_per_ml) || 0;
+        const total = ml * iuPerMl;
+        return total > 0 ? total.toFixed(2) : '';
+    }, [data.heparin_ml, data.heparin_iu_per_ml]);
+
     const lipidVolumeForQs = data.lipid_piggyback ? lipidVolumeMl : '';
 
     const qsVolumeMl = useMemo(() => {
@@ -253,6 +284,7 @@ export function OrderForm({
             phosphorusVolumeMl,
             traceElementsVolumeMl,
             multivitaminsVolumeMl,
+            data.heparin_ml,
         ]);
     }, [
         data.total_fluid_ml,
@@ -266,13 +298,135 @@ export function OrderForm({
         phosphorusVolumeMl,
         traceElementsVolumeMl,
         multivitaminsVolumeMl,
+        data.heparin_ml,
     ]);
+
+    const effectiveOsmolarityData = useMemo<TpnOrderFormData>(() => {
+        const useOverrideOrComputed = (
+            overrideValue: string,
+            computedValue: string,
+        ) => {
+            return String(overrideValue ?? '').trim() !== ''
+                ? overrideValue
+                : computedValue;
+        };
+
+        const lipid10VolumeMl =
+            data.lipid_concentration === '10' ? lipidVolumeMl : '';
+
+        const lipid20VolumeMl =
+            data.lipid_concentration === '20' ? lipidVolumeMl : '';
+
+        const sterileWaterVolumeMl =
+            String(data.sterile_water_level_ml_day ?? '').trim() !== ''
+                ? data.sterile_water_level_ml_day
+                : qsVolumeMl;
+
+        return {
+            ...data,
+
+            osmolarity_ppn_volume_ml: useOverrideOrComputed(
+                data.osmolarity_ppn_volume_ml,
+                data.total_fluid_ml,
+            ),
+
+            osmolarity_amino_acid_10_grams: useOverrideOrComputed(
+                data.osmolarity_amino_acid_10_grams,
+                proteinGramsPerDay,
+            ),
+
+            osmolarity_dextrose_concentration: useOverrideOrComputed(
+                data.osmolarity_dextrose_concentration,
+                data.dextrose_percent,
+            ),
+
+            osmolarity_dextrose_grams: useOverrideOrComputed(
+                data.osmolarity_dextrose_grams,
+                dextroseGramsPerDay,
+            ),
+
+            osmolarity_lipid_10_ml: useOverrideOrComputed(
+                data.osmolarity_lipid_10_ml,
+                lipid10VolumeMl,
+            ),
+
+            osmolarity_lipid_20_ml: useOverrideOrComputed(
+                data.osmolarity_lipid_20_ml,
+                lipid20VolumeMl,
+            ),
+
+            osmolarity_sterile_water_ml: useOverrideOrComputed(
+                data.osmolarity_sterile_water_ml,
+                sterileWaterVolumeMl,
+            ),
+
+            osmolarity_calcium_gluconate_10_ml: useOverrideOrComputed(
+                data.osmolarity_calcium_gluconate_10_ml,
+                calciumVolumeMl,
+            ),
+
+            osmolarity_magnesium_sulfate_ml: useOverrideOrComputed(
+                data.osmolarity_magnesium_sulfate_ml,
+                magnesiumVolumeMl,
+            ),
+
+            osmolarity_multi_trace_elements_ml: useOverrideOrComputed(
+                data.osmolarity_multi_trace_elements_ml,
+                traceElementsVolumeMl,
+            ),
+
+            osmolarity_multivitamin_12_ml: useOverrideOrComputed(
+                data.osmolarity_multivitamin_12_ml,
+                multivitaminsVolumeMl,
+            ),
+
+            osmolarity_potassium_chloride_ml: useOverrideOrComputed(
+                data.osmolarity_potassium_chloride_ml,
+                potassiumVolumeMl,
+            ),
+
+            osmolarity_sodium_chloride_14_6_ml: useOverrideOrComputed(
+                data.osmolarity_sodium_chloride_14_6_ml,
+                sodiumVolumeMl,
+            ),
+
+            osmolarity_sodium_phosphate_ml: useOverrideOrComputed(
+                data.osmolarity_sodium_phosphate_ml,
+                phosphorusVolumeMl,
+            ),
+        };
+    }, [
+        data,
+        proteinGramsPerDay,
+        dextroseGramsPerDay,
+        lipidVolumeMl,
+        qsVolumeMl,
+        sodiumVolumeMl,
+        potassiumVolumeMl,
+        calciumVolumeMl,
+        magnesiumVolumeMl,
+        phosphorusVolumeMl,
+        traceElementsVolumeMl,
+        multivitaminsVolumeMl,
+    ]);
+
+    const computedOsmolarity = useMemo(() => {
+        return calculateGlobalRphStyleOsmolarity(
+            effectiveOsmolarityData,
+            data.total_fluid_ml,
+        );
+    }, [effectiveOsmolarityData, data.total_fluid_ml]);
+
+    const isPeripheralDanger = data.route === 'Peripheral Line' && Number(computedOsmolarity) >= 900;
 
     const currentTabIndex = orderTabs.findIndex((tab) => tab.key === activeTab);
     const isFirstTab = currentTabIndex === 0;
     const isLastTab = currentTabIndex === orderTabs.length - 1;
 
-    const requiredFieldsByTab: Record<OrderTabKey, Array<keyof TpnOrderFormData>> = {
+    const requiredFieldsByTab: Record<
+        OrderTabKey,
+        Array<keyof TpnOrderFormData>
+    > = {
         patient: ['last_name', 'first_name'],
         clinical: ['current_weight_kg'],
         requirements: ['total_fluid_ml', 'duration_hours'],
@@ -280,13 +434,14 @@ export function OrderForm({
         review: [],
     };
 
-    const requiredFieldLabels: Partial<Record<keyof TpnOrderFormData, string>> = {
-        last_name: 'Last name',
-        first_name: 'First name',
-        current_weight_kg: 'Current weight',
-        total_fluid_ml: 'Total fluid',
-        duration_hours: 'Duration',
-    };
+    const requiredFieldLabels: Partial<Record<keyof TpnOrderFormData, string>> =
+        {
+            last_name: 'Last name',
+            first_name: 'First name',
+            current_weight_kg: 'Current weight',
+            total_fluid_ml: 'Total fluid',
+            duration_hours: 'Duration',
+        };
 
     function isRequiredFieldEmpty(field: keyof TpnOrderFormData) {
         const value = data[field];
@@ -319,7 +474,10 @@ export function OrderForm({
     }
 
     function fieldHasError(field: keyof TpnOrderFormData) {
-        return attemptedRequiredFields[field] === true && isRequiredFieldEmpty(field);
+        return (
+            attemptedRequiredFields[field] === true &&
+            isRequiredFieldEmpty(field)
+        );
     }
 
     function getFieldErrorClass(field: keyof TpnOrderFormData) {
@@ -384,7 +542,21 @@ export function OrderForm({
             }
         }
 
-        onSubmit?.(data);
+        // --- NEW: OSMOLARITY HARD STOP ---
+        if (isPeripheralDanger) {
+            setActiveTab('computation');
+            return;
+        }
+
+        const payload: TpnOrderFormData = {
+            ...data,
+            osmolarity_inputs_json: JSON.stringify(
+                buildOsmolarityInputsPayload(effectiveOsmolarityData),
+            ),
+            osmolarity_computed_mosm_l: computedOsmolarity || '',
+        };
+
+        onSubmit?.(payload);
     }
 
     const tabContent: Record<OrderTabKey, ReactNode> = {
@@ -419,6 +591,9 @@ export function OrderForm({
         computation: (
             <ComputationSection
                 data={data}
+                effectiveOsmolarityData={effectiveOsmolarityData}
+                computedOsmolarity={computedOsmolarity}
+                isPeripheralDanger={isPeripheralDanger}
                 computedWeightKg={computedWeightKg}
                 computedRateMlPerHour={computedRateMlPerHour}
                 proteinGramsPerDay={proteinGramsPerDay}
@@ -450,12 +625,15 @@ export function OrderForm({
                 }
                 qsVolumeMl={qsVolumeMl}
                 multivitaminsVolumeMl={multivitaminsVolumeMl}
+                heparinTotalIu={heparinTotalIu}
                 updateField={updateField}
             />
         ),
         review: (
             <ReviewSection
                 data={data}
+                computedOsmolarity={computedOsmolarity}
+                isPeripheralDanger={isPeripheralDanger}
                 computedAge={computedAge}
                 computedWeightKg={computedWeightKg}
                 computedBmi={computedBmi}
@@ -489,6 +667,7 @@ export function OrderForm({
                 }
                 qsVolumeMl={qsVolumeMl}
                 multivitaminsVolumeMl={multivitaminsVolumeMl}
+                heparinTotalIu={heparinTotalIu}
             />
         ),
     };
@@ -511,22 +690,25 @@ export function OrderForm({
                                         return;
                                     }
 
-                                    const missingFields = getMissingRequiredFields(activeTab);
+                                    const missingFields =
+                                        getMissingRequiredFields(activeTab);
 
                                     if (missingFields.length > 0) {
-                                        markRequiredFieldsAsAttempted(missingFields);
+                                        markRequiredFieldsAsAttempted(
+                                            missingFields,
+                                        );
                                         return;
                                     }
 
                                     setActiveTab(tab.key);
                                 }}
                                 className={[
-                                    'flex min-h-[76px] items-center gap-3 rounded-xl border px-4 py-3 text-left transition cursor-pointer',
+                                    'flex min-h-[76px] cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-left transition',
                                     isActive
                                         ? 'border-primary bg-primary text-primary-foreground shadow-sm'
                                         : isCompleted
-                                            ? 'border-primary/30 bg-primary/5 text-foreground'
-                                            : 'border-border bg-background text-foreground hover:bg-muted/60',
+                                          ? 'border-primary/30 bg-primary/5 text-foreground'
+                                          : 'border-border bg-background text-foreground hover:bg-muted/60',
                                 ].join(' ')}
                             >
                                 <span
@@ -535,8 +717,8 @@ export function OrderForm({
                                         isActive
                                             ? 'bg-primary-foreground text-primary'
                                             : isCompleted
-                                                ? 'bg-primary text-primary-foreground'
-                                                : 'bg-muted text-muted-foreground',
+                                              ? 'bg-primary text-primary-foreground'
+                                              : 'bg-muted text-muted-foreground',
                                     ].join(' ')}
                                 >
                                     {index + 1}
@@ -557,8 +739,8 @@ export function OrderForm({
                                         {isActive
                                             ? 'Current step'
                                             : isCompleted
-                                                ? 'Completed'
-                                                : tab.description}
+                                              ? 'Completed'
+                                              : tab.description}
                                     </span>
                                 </span>
                             </button>
@@ -579,9 +761,8 @@ export function OrderForm({
                         Please complete the required fields before continuing.
                     </div>
                 ) : null}
-                
+
                 <div className="flex flex-col gap-3 pb-1 sm:flex-row sm:items-center sm:justify-between">
-                    
                     <Button
                         variant="outline"
                         type="button"
@@ -606,14 +787,22 @@ export function OrderForm({
                         ) : null}
 
                         {isLastTab ? (
-                            <Button
-                                type="button"
-                                onClick={handleSubmit}
-                                className="cursor-pointer"
-                                disabled={isSubmitting}
-                            >
-                                {submitLabel}
-                            </Button>
+                            <div className="flex items-center gap-4">
+                                {/* Shows a warning next to the submit button */}
+                                {isPeripheralDanger && (
+                                    <span className="text-sm font-semibold text-red-600">
+                                        Fix Osmolarity limits to submit
+                                    </span>
+                                )}
+                                <Button
+                                    type="button"
+                                    onClick={handleSubmit}
+                                    className="cursor-pointer"
+                                    disabled={isSubmitting || isPeripheralDanger}
+                                >
+                                    {submitLabel}
+                                </Button>
+                            </div>
                         ) : (
                             <Button
                                 type="button"
@@ -638,7 +827,9 @@ type SectionProps = {
         value: TpnOrderFormData[K],
     ) => void;
     getFieldErrorClass?: (field: keyof TpnOrderFormData) => string;
-    getFieldErrorMessage?: (field: keyof TpnOrderFormData) => string | undefined;
+    getFieldErrorMessage?: (
+        field: keyof TpnOrderFormData,
+    ) => string | undefined;
 };
 
 type PatientInformationSectionProps = SectionProps & {
@@ -657,6 +848,9 @@ type TpnRequirementsSectionProps = SectionProps & {
 type ComputationSectionProps = SectionProps & {
     computedWeightKg: string;
     computedRateMlPerHour: string;
+    effectiveOsmolarityData: TpnOrderFormData;
+    computedOsmolarity: string;
+    isPeripheralDanger: boolean;
     proteinGramsPerDay: string;
     proteinVolumeMl: string;
     dextroseGramsPerDay: string;
@@ -684,10 +878,13 @@ type ComputationSectionProps = SectionProps & {
     totalNonProteinCaloriesPerKgDay: string;
     qsVolumeMl: string;
     multivitaminsVolumeMl: string;
+    heparinTotalIu: string;
 };
 
 type ReviewSectionProps = {
     data: TpnOrderFormData;
+    computedOsmolarity: string;
+    isPeripheralDanger: boolean;
     computedAge: string;
     computedWeightKg: string;
     computedBmi: string;
@@ -719,6 +916,7 @@ type ReviewSectionProps = {
     totalNonProteinCaloriesPerKgDay: string;
     qsVolumeMl: string;
     multivitaminsVolumeMl: string;
+    heparinTotalIu: string;
 };
 
 function formatVolumeDisplay(value: string): string {
@@ -951,18 +1149,27 @@ function PatientInformationSection({
                         >
                             <DialogContent className="w-auto max-w-none p-0">
                                 <DialogHeader className="border-b px-5 py-4">
-                                    <DialogTitle>Select Date of Birth</DialogTitle>
+                                    <DialogTitle>
+                                        Select Date of Birth
+                                    </DialogTitle>
                                 </DialogHeader>
 
                                 <div className="px-4 py-4">
                                     <Calendar
                                         mode="single"
                                         selected={draftBirthDate}
-                                        onSelect={(date) => setDraftBirthDate(date)}
+                                        onSelect={(date) =>
+                                            setDraftBirthDate(date)
+                                        }
                                         captionLayout="dropdown"
                                         hideNavigation
                                         startMonth={new Date(1900, 0)}
-                                        endMonth={new Date(new Date().getFullYear(), 11)}
+                                        endMonth={
+                                            new Date(
+                                                new Date().getFullYear(),
+                                                11,
+                                            )
+                                        }
                                         disabled={(date) => date > new Date()}
                                     />
                                 </div>
@@ -981,13 +1188,15 @@ function PatientInformationSection({
                                         type="button"
                                         variant="outline"
                                         className="cursor-pointer"
-                                        onClick={() => setBirthDateDialogOpen(false)}
+                                        onClick={() =>
+                                            setBirthDateDialogOpen(false)
+                                        }
                                     >
                                         Cancel
                                     </Button>
 
-                                    <Button 
-                                        type="button" 
+                                    <Button
+                                        type="button"
                                         className="cursor-pointer"
                                         onClick={confirmBirthDate}
                                     >
@@ -1019,9 +1228,7 @@ function PatientInformationSection({
                     >
                         <Select
                             value={data.sex}
-                            onValueChange={(value) =>
-                                updateField('sex', value)
-                            }
+                            onValueChange={(value) => updateField('sex', value)}
                         >
                             <SelectTrigger id="sex" className="w-full">
                                 <SelectValue placeholder="Select sex" />
@@ -1179,10 +1386,15 @@ function ClinicalDetailsSection({
                             type="number"
                             value={data.current_weight_kg}
                             onChange={(event) =>
-                                updateField('current_weight_kg', event.target.value)
+                                updateField(
+                                    'current_weight_kg',
+                                    event.target.value,
+                                )
                             }
                             placeholder="0.00"
-                            className={getFieldErrorClass?.('current_weight_kg')}
+                            className={getFieldErrorClass?.(
+                                'current_weight_kg',
+                            )}
                         />
                     </Field>
 
@@ -1293,7 +1505,10 @@ function TpnRequirementsSection({
                             type="number"
                             value={data.total_fluid_ml}
                             onChange={(event) =>
-                                updateField('total_fluid_ml', event.target.value)
+                                updateField(
+                                    'total_fluid_ml',
+                                    event.target.value,
+                                )
                             }
                             placeholder="0"
                             className={getFieldErrorClass?.('total_fluid_ml')}
@@ -1312,7 +1527,10 @@ function TpnRequirementsSection({
                             type="number"
                             value={data.duration_hours}
                             onChange={(event) =>
-                                updateField('duration_hours', event.target.value)
+                                updateField(
+                                    'duration_hours',
+                                    event.target.value,
+                                )
                             }
                             placeholder="24"
                             className={getFieldErrorClass?.('duration_hours')}
@@ -1371,8 +1589,12 @@ function TpnRequirementsSection({
 
 function ComputationSection({
     data,
+    updateField,
     computedWeightKg,
     computedRateMlPerHour,
+    effectiveOsmolarityData,
+    computedOsmolarity,
+    isPeripheralDanger,
     proteinGramsPerDay,
     proteinVolumeMl,
     dextroseGramsPerDay,
@@ -1400,7 +1622,7 @@ function ComputationSection({
     totalNonProteinCaloriesPerKgDay,
     qsVolumeMl,
     multivitaminsVolumeMl,
-    updateField,
+    heparinTotalIu,
 }: ComputationSectionProps) {
     return (
         <div className="space-y-4">
@@ -1641,8 +1863,8 @@ function ComputationSection({
                     </div>
 
                     <div className="mt-3 rounded-md border border-emerald-200 bg-white/70 px-4 py-2 text-sm text-emerald-900">
-                        ((Fat g/day × 9) + (Dextrose g/day × 3.4)) ÷ Weight Used =
-                        Total Non-Protein Calories
+                        ((Fat g/day × 9) + (Dextrose g/day × 3.4)) ÷ Weight Used
+                        = Total Non-Protein Calories
                     </div>
                 </CardContent>
             </Card>
@@ -1698,10 +1920,10 @@ function ComputationSection({
                             onDoseChange={(value) =>
                                 updateField('calcium_mg_kg_day', value)
                             }
-                            doseUnit="meqs/kg/day"
+                            doseUnit="mg/kg/day"
                             weight={computedWeightKg}
                             result={calciumMgPerDay}
-                            resultUnit="meqs/day"
+                            resultUnit="mg/day"
                             volume={calciumVolumeMl}
                         />
 
@@ -1801,40 +2023,74 @@ function ComputationSection({
                         />
 
                         <AdditiveTableRow
+                            label="Heparin"
+                            input={
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <ComputationNumberInput
+                                        value={data.heparin_ml}
+                                        onChange={(value) =>
+                                            updateField('heparin_ml', value)
+                                        }
+                                    />
+                                    <span className="text-sm text-muted-foreground">
+                                        mL
+                                    </span>
+                                    <span className="text-sm font-medium">×</span>
+                                    <ComputationNumberInput
+                                        value={data.heparin_iu_per_ml}
+                                        onChange={(value) =>
+                                            updateField('heparin_iu_per_ml', value)
+                                        }
+                                    />
+                                    <span className="text-sm text-muted-foreground">
+                                        I.U./mL
+                                    </span>
+                                </div>
+                            }
+                            result={
+                                data.heparin_ml
+                                    ? `${heparinTotalIu} I.U.`
+                                    : '—'
+                            }
+                        />
+
+                        <AdditiveTableRow
                             label="QS / Sterile Water"
                             input={
-                                <span className="text-sm text-muted-foreground">
-                                    Total fluid minus all ingredient volumes
-                                </span>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <ComputationNumberInput
+                                        value={data.sterile_water_level_ml_day}
+                                        onChange={(value) =>
+                                            updateField(
+                                                'sterile_water_level_ml_day',
+                                                value,
+                                            )
+                                        }
+                                    />
+                                    <span className="text-sm text-muted-foreground">
+                                        mL
+                                    </span>
+                                </div>
                             }
-                            result={qsVolumeMl ? `${qsVolumeMl} mL` : '—'}
+                            result={
+                                qsVolumeMl
+                                    ? `${qsVolumeMl} mL (Recommended)`
+                                    : '—'
+                            }
                         />
                     </div>
                 </CardContent>
             </Card>
 
-            <Card className="rounded-lg border-border/80 shadow-sm">
-                <CardHeader className="pb-3">
-                    <CardTitle>Osmolarity Computation</CardTitle>
-                    <CardDescription>
-                        Enter the osmolarity calculation or pharmacist notes.
-                    </CardDescription>
-                </CardHeader>
-
-                <CardContent>
-                    <Textarea
-                        value={data.osmolarity_notes}
-                        onChange={(event) =>
-                            updateField(
-                                'osmolarity_notes',
-                                event.target.value,
-                            )
-                        }
-                        placeholder="Enter osmolarity computation or notes"
-                        className="min-h-[96px]"
-                    />
-                </CardContent>
-            </Card>
+            <GlobalRphOsmolarityCalculator
+                data={data}
+                effectiveData={effectiveOsmolarityData}
+                updateField={updateField}
+                computedOsmolarity={computedOsmolarity}
+                isPeripheralDanger={isPeripheralDanger}
+                totalVolumeMl={Number(data.total_fluid_ml) || 0}
+                route={data.route}
+            />
         </div>
     );
 }
@@ -1897,7 +2153,7 @@ function ComputationLine({
 }) {
     return (
         <div className="flex min-h-[34px] items-center justify-between gap-3 rounded-md border border-border/70 bg-muted/30 px-3 py-1.5">
-            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                 {label}
             </span>
 
@@ -1924,7 +2180,7 @@ function ComputationValue({
 }) {
     return (
         <div className="rounded-md border border-emerald-200 bg-white/80 px-3 py-2">
-            <span className="block text-xs font-medium uppercase tracking-wide text-emerald-800">
+            <span className="block text-xs font-medium tracking-wide text-emerald-800 uppercase">
                 {label}
             </span>
 
@@ -1986,7 +2242,7 @@ function ElectrolyteTableRow({
             </div>
 
             <div className="px-3 py-2 text-sm font-medium">
-                {volume ? `${volume} mL` : '—'}
+                {volume ? `${volume} mL/day` : '—'}
             </div>
         </div>
     );
@@ -2036,6 +2292,8 @@ function ComputationNumberInput({
 
 function ReviewSection({
     data,
+    computedOsmolarity,
+    isPeripheralDanger,
     computedAge,
     computedWeightKg,
     computedBmi,
@@ -2126,10 +2384,7 @@ function ReviewSection({
                         label="Current Weight"
                         value={data.current_weight_kg}
                     />
-                    <ReviewRow
-                        label="Weight Used"
-                        value={computedWeightKg}
-                    />
+                    <ReviewRow label="Weight Used" value={computedWeightKg} />
                     <ReviewRow label="Height" value={data.height_cm} />
                     <ReviewRow label="BMI" value={computedBmi} />
                     <ReviewRow
@@ -2184,7 +2439,11 @@ function ReviewSection({
                             />
                             <ReviewRow
                                 label="Volume"
-                                value={proteinVolumeMl ? `${proteinVolumeMl} mL` : ''}
+                                value={
+                                    proteinVolumeMl
+                                        ? `${proteinVolumeMl} mL`
+                                        : ''
+                                }
                             />
                         </div>
 
@@ -2211,11 +2470,11 @@ function ReviewSection({
                             />
                             <ReviewRow
                                 label="Volume"
-                                value={dextroseVolumeMl ? `${dextroseVolumeMl} mL` : ''}
-                            />
-                            <ReviewRow
-                                label="GIR"
-                                value={gir ? `${gir} mg/kg/min` : ''}
+                                value={
+                                    dextroseVolumeMl
+                                        ? `${dextroseVolumeMl} mL`
+                                        : ''
+                                }
                             />
                         </div>
 
@@ -2242,18 +2501,8 @@ function ReviewSection({
                             />
                             <ReviewRow
                                 label="Volume"
-                                value={lipidVolumeMl ? `${lipidVolumeMl} mL` : ''}
-                            />
-                            <ReviewRow
-                                label="Bottle Qty"
-                                value={lipidBottleVolumeMl ? `${lipidBottleVolumeMl} mL` : ''}
-                            />
-                            <ReviewRow
-                                label="Rate"
                                 value={
-                                    lipidRateMlPerHour
-                                        ? `${lipidRateMlPerHour} mL/hr`
-                                        : ''
+                                    lipidVolumeMl ? `${lipidVolumeMl} mL` : ''
                                 }
                             />
                         </div>
@@ -2268,16 +2517,14 @@ function ReviewSection({
                             <ReviewRow
                                 label="Sodium"
                                 value={
-                                    sodiumMeqPerDay
-                                        ? `${sodiumMeqPerDay} meqs/day${sodiumVolumeMl ? ` / ${sodiumVolumeMl} mL` : ''}`
-                                        : ''
+                                    sodiumVolumeMl ? `${sodiumVolumeMl} mL` : ''
                                 }
                             />
                             <ReviewRow
                                 label="Potassium"
                                 value={
-                                    potassiumMeqPerDay
-                                        ? `${potassiumMeqPerDay} meqs/day${potassiumVolumeMl ? ` / ${potassiumVolumeMl} mL` : ''}`
+                                    potassiumVolumeMl
+                                        ? `${potassiumVolumeMl} mL`
                                         : ''
                                 }
                             />
@@ -2285,8 +2532,8 @@ function ReviewSection({
                             <ReviewRow
                                 label="Calcium"
                                 value={
-                                    calciumMgPerDay
-                                        ? `${calciumMgPerDay} meqs/day${calciumVolumeMl ? ` / ${calciumVolumeMl} mL` : ''}`
+                                    calciumVolumeMl
+                                        ? `${calciumVolumeMl} mL`
                                         : ''
                                 }
                             />
@@ -2294,8 +2541,8 @@ function ReviewSection({
                             <ReviewRow
                                 label="Magnesium"
                                 value={
-                                    magnesiumMeqPerDay
-                                        ? `${magnesiumMeqPerDay} meqs/day${magnesiumVolumeMl ? ` / ${magnesiumVolumeMl} mL` : ''}`
+                                    magnesiumVolumeMl
+                                        ? `${magnesiumVolumeMl} mL`
                                         : ''
                                 }
                             />
@@ -2303,30 +2550,42 @@ function ReviewSection({
                             <ReviewRow
                                 label="Phosphorus"
                                 value={
-                                    phosphorusMmolPerDay
-                                        ? `${phosphorusMmolPerDay} mmol/day${phosphorusVolumeMl ? ` / ${phosphorusVolumeMl} mL` : ''}`
+                                    phosphorusVolumeMl
+                                        ? `${phosphorusVolumeMl} mL`
                                         : ''
                                 }
                             />
                             <ReviewRow
                                 label="Trace Elements"
                                 value={
-                                    traceElementsMlPerDay
-                                        ? `${traceElementsMlPerDay} mL/day${traceElementsVolumeMl ? ` / ${traceElementsVolumeMl} mL` : ''}`
+                                    traceElementsVolumeMl
+                                        ? `${traceElementsVolumeMl} mL`
                                         : ''
                                 }
                             />
                             <ReviewRow
                                 label="Multivitamins"
                                 value={
-                                    data.multivitamins_ml_day
-                                        ? `${data.multivitamins_ml_day} mL/day${multivitaminsVolumeMl ? ` / ${multivitaminsVolumeMl} mL` : ''}`
+                                    multivitaminsVolumeMl
+                                        ? `${multivitaminsVolumeMl} mL`
+                                        : ''
+                                }
+                            />
+                            <ReviewRow
+                                label="Heparin"
+                                value={
+                                    data.heparin_ml
+                                        ? `${data.heparin_ml} mL`
                                         : ''
                                 }
                             />
                             <ReviewRow
                                 label="QS / Sterile Water"
-                                value={qsVolumeMl ? `${qsVolumeMl} mL` : ''}
+                                value={
+                                    data.sterile_water_level_ml_day
+                                        ? `${data.sterile_water_level_ml_day} mL`
+                                        : ''
+                                }
                             />
                         </div>
                     </div>
@@ -2347,18 +2606,22 @@ function ReviewSection({
                     </div>
 
                     <div className="grid gap-3 rounded-lg border border-border/70 bg-background p-4">
-                        <div className="text-sm font-semibold text-[#0b5d0b]">
-                            Osmolarity Computation
-                        </div>
+                        <ReviewRow
+                            label="Osmolarity"
+                            value={computedOsmolarity ? `${computedOsmolarity} mOsm/L` : '—'}
+                        />
 
-                        <div className="whitespace-pre-wrap text-sm text-muted-foreground">
-                            {data.osmolarity_notes || '—'}
-                        </div>
+                        {isPeripheralDanger ? (
+                            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                                Peripheral line osmolarity is above the safe limit. Please adjust the formulation before submitting.
+                            </div>
+                        ) : null}
                     </div>
 
                     {data.is_initial_order ? (
                         <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                            This initial TPN order requires Nutrition Support Team approval.
+                            This initial TPN order requires Nutrition Support
+                            Team approval.
                         </div>
                     ) : null}
                 </div>
@@ -2400,9 +2663,7 @@ function Field({
         <div className="grid gap-2" style={style}>
             <Label htmlFor={htmlFor}>
                 {label}
-                {required ? (
-                    <span className="ml-1 text-red-600">*</span>
-                ) : null}
+                {required ? <span className="ml-1 text-red-600">*</span> : null}
             </Label>
 
             {children}
@@ -2414,21 +2675,291 @@ function Field({
     );
 }
 
-function ReviewRow({
-    label,
-    value,
-}: {
-    label: string;
-    value: string;
-}) {
+function ReviewRow({ label, value }: { label: string; value: string }) {
     return (
         <div className="flex items-start justify-between gap-4 border-b border-border/60 pb-2 last:border-b-0 last:pb-0">
-            <span className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+            <span className="text-xs font-medium tracking-[0.12em] text-muted-foreground uppercase">
                 {label}
             </span>
             <span className="text-right text-sm font-medium text-foreground">
                 {value || '—'}
             </span>
         </div>
+    );
+}
+
+type OsmolarityFormField = keyof TpnOrderFormData;
+
+function isOsmolarityFormField(value: string): value is OsmolarityFormField {
+    return value in initialOrderFormData;
+}
+
+function getOsmolarityFieldValue(
+    data: TpnOrderFormData,
+    field: string,
+): string {
+    if (!isOsmolarityFormField(field)) {
+        return '';
+    }
+
+    return String(data[field] ?? '');
+}
+
+function buildOsmolarityInputsPayload(data: TpnOrderFormData) {
+    return {
+        route: data.route,
+
+        ppn: {
+            solution: data.osmolarity_ppn_solution,
+            volume_ml: data.osmolarity_ppn_volume_ml,
+            lock_total_volume: data.osmolarity_ppn_lock_total_volume,
+        },
+
+        tpn: {
+            amino_acid_10_grams: data.osmolarity_amino_acid_10_grams,
+            amino_acid_15_grams: data.osmolarity_amino_acid_15_grams,
+            dextrose_concentration: data.osmolarity_dextrose_concentration,
+            dextrose_grams: data.osmolarity_dextrose_grams,
+            hepatamine_8_grams: data.osmolarity_hepatamine_8_grams,
+            lipid_10_ml: data.osmolarity_lipid_10_ml,
+            lipid_20_ml: data.osmolarity_lipid_20_ml,
+            novamine_15_grams: data.osmolarity_novamine_15_grams,
+            sterile_water_ml: data.osmolarity_sterile_water_ml,
+        },
+
+        additives: {
+            calcium_gluconate_10_ml:
+                data.osmolarity_calcium_gluconate_10_ml,
+            calcium_chloride_10_ml:
+                data.osmolarity_calcium_chloride_10_ml,
+            magnesium_sulfate_ml: data.osmolarity_magnesium_sulfate_ml,
+            multi_trace_elements_ml:
+                data.osmolarity_multi_trace_elements_ml,
+            multivitamin_12_ml: data.osmolarity_multivitamin_12_ml,
+            potassium_acetate_ml: data.osmolarity_potassium_acetate_ml,
+            potassium_chloride_ml: data.osmolarity_potassium_chloride_ml,
+            potassium_phosphate_ml: data.osmolarity_potassium_phosphate_ml,
+            sodium_acetate_ml: data.osmolarity_sodium_acetate_ml,
+            sodium_bicarbonate_4_2_ml:
+                data.osmolarity_sodium_bicarbonate_4_2_ml,
+            sodium_bicarbonate_7_5_ml:
+                data.osmolarity_sodium_bicarbonate_7_5_ml,
+            sodium_bicarbonate_8_4_ml:
+                data.osmolarity_sodium_bicarbonate_8_4_ml,
+            sodium_chloride_14_6_ml:
+                data.osmolarity_sodium_chloride_14_6_ml,
+            sodium_chloride_23_4_ml:
+                data.osmolarity_sodium_chloride_23_4_ml,
+            sodium_phosphate_ml: data.osmolarity_sodium_phosphate_ml,
+        },
+    };
+}
+
+function GlobalRphOsmolarityCalculator({
+    data,
+    effectiveData,
+    updateField,
+    computedOsmolarity,
+    isPeripheralDanger,
+    totalVolumeMl,
+    route,
+}: {
+    data: TpnOrderFormData;
+    effectiveData: TpnOrderFormData;
+    updateField: <K extends keyof TpnOrderFormData>(
+        field: K,
+        value: TpnOrderFormData[K],
+    ) => void;
+    computedOsmolarity: string;
+    isPeripheralDanger: boolean;
+    totalVolumeMl: number;
+    route: string;
+}) {
+    // PPN States
+    const ppnSolution = effectiveData.osmolarity_ppn_solution || 'd10w';
+    const ppnVolume =
+        effectiveData.osmolarity_ppn_volume_ml || totalVolumeMl.toString();
+    const lockTotalVolume =
+        effectiveData.osmolarity_ppn_lock_total_volume || 'no';
+
+    const isPeripheral = route === 'Peripheral Line';
+    const isTpn = route !== 'Peripheral Line';
+
+    const renderOsmolarityInput = (field: string, label: string) => {
+        if (!isOsmolarityFormField(field)) {
+            return null;
+        }
+
+        const unit = field.endsWith('_ml') ? 'mL' : 'g';
+
+        return (
+            <div key={field} className="flex items-center justify-between gap-4">
+                <Label className="w-1/2 leading-tight">
+                    {label}
+                    <span className="ml-1 text-xs text-muted-foreground">
+                        ({unit})
+                    </span>
+                </Label>
+
+                <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={getOsmolarityFieldValue(effectiveData, field)}
+                    onChange={(e) => updateField(field, e.target.value)}
+                    className="w-1/2 bg-white text-right"
+                />
+            </div>
+        );
+    };
+
+    const renderDextroseConcentrationSelect = () => {
+        return (
+            <div className="flex items-center justify-between gap-4">
+                <Label className="w-1/2 leading-tight">
+                    Dextrose Concentration
+                    <span className="ml-1 text-xs text-muted-foreground">
+                        (%)
+                    </span>
+                </Label>
+
+                <Select
+                    value={effectiveData.osmolarity_dextrose_concentration || '50'}
+                    onValueChange={(value) =>
+                        updateField('osmolarity_dextrose_concentration', value)
+                    }
+                >
+                    <SelectTrigger className="w-1/2 bg-white">
+                        <SelectValue placeholder="Select concentration" />
+                    </SelectTrigger>
+
+                    <SelectContent>
+                        {osmolarityDextroseConcentrationOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+        );
+    };
+
+    return (
+        <Card className={`rounded-lg shadow-sm mt-8 ${isPeripheralDanger ? 'border-red-400' : 'border-blue-200'}`}>
+            <CardHeader className={`${isPeripheralDanger ? 'bg-red-50/80 border-red-200' : 'bg-blue-50/50 border-blue-100'} pb-4 border-b`}>
+                <CardTitle className={`${isPeripheralDanger ? 'text-red-900' : 'text-blue-900'} text-lg flex items-center justify-between`}>
+                    <span>
+                        {isPeripheral ? 'PPN Osmolarity Calculator' : 'TPN Osmolarity Calculator'}
+                    </span>
+                    <span className={`text-xl font-bold px-4 py-1 rounded-md ${isPeripheralDanger ? 'bg-red-200 text-red-900' :
+                            isPeripheral ? 'bg-emerald-100 text-emerald-900' : 'bg-blue-100 text-blue-900'
+                        }`}>
+                        {computedOsmolarity || '—'} mOsm/L
+                    </span>
+                </CardTitle>
+                <CardDescription className={isPeripheralDanger ? 'text-red-800' : 'text-blue-700'}>
+                    {isPeripheralDanger ? (
+                        <span className="block mt-3 font-bold text-red-700 bg-red-100/50 p-2 rounded border border-red-200 shadow-sm">
+                            ⚠️ FATAL ERROR: Osmolarity exceeds safe peripheral limits (&lt;900 mOsm/L).
+                        </span>
+                    ) : isPeripheral ? (
+                        <span className="block mt-2 font-semibold text-emerald-700">✓ Safe for Peripheral Line</span>
+                    ) : isTpn ? (
+                        <span className="block mt-2 font-semibold text-blue-700">✓ TPN route selected</span>
+                    ) : null}
+                </CardDescription>
+            </CardHeader>
+
+            <CardContent className="pt-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+                    {/* LEFT COLUMN: BASE SOLUTION */}
+                    <div className="space-y-4">
+                        <h4 className="font-semibold text-sm uppercase text-muted-foreground border-b pb-1">
+                            {isPeripheral ? 'Base Solution' : 'TPN Components'}
+                        </h4>
+
+                        {isPeripheral ? (
+                            <>
+                                <div className="flex items-center justify-between gap-4">
+                                    <Label className="w-1/2">Solution</Label>
+                                    <Select
+                                        value={ppnSolution}
+                                        onValueChange={(value) =>
+                                            updateField('osmolarity_ppn_solution', value)
+                                        }
+                                    >
+                                        <SelectTrigger className="w-1/2 bg-white">
+                                            <SelectValue placeholder="Select solution" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {osmolarityPpnSolutionOptions.map((option) => (
+                                                <SelectItem key={option.value} value={option.value}>
+                                                    {option.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="flex items-center justify-between gap-4">
+                                    <Label className="w-1/2">Volume (mL)</Label>
+                                    <Input
+                                        type="number"
+                                        value={ppnVolume}
+                                        onChange={(e) =>
+                                            updateField('osmolarity_ppn_volume_ml', e.target.value)
+                                        }
+                                        className="w-1/2 bg-white text-right"
+                                    />                                
+                                </div>
+                                <div className="flex items-center justify-between gap-4 pt-2">
+                                    <Label className="w-1/2 leading-tight">Lock total volume to amount listed above?</Label>
+                                    <Select
+                                        value={lockTotalVolume}
+                                        onValueChange={(value) =>
+                                            updateField('osmolarity_ppn_lock_total_volume', value)
+                                        }
+                                    >
+                                        <SelectTrigger className="w-1/2 bg-white">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {osmolarityLockTotalVolumeOptions.map((option) => (
+                                                <SelectItem key={option.value} value={option.value}>
+                                                    {option.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="grid gap-3">
+                                {renderDextroseConcentrationSelect()}
+
+                                {osmolarityTpnMacronutrientFields.map((field) =>
+                                    renderOsmolarityInput(field.value, field.label),
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* RIGHT COLUMN: SHARED ADDITIVES */}
+                    <div className="space-y-4">
+                        <h4 className="border-b pb-1 text-sm font-semibold text-muted-foreground uppercase">
+                            Additives
+                        </h4>
+
+                        <div className="grid gap-3">
+                            {osmolarityAdditiveFields.map((field) =>
+                                renderOsmolarityInput(field.value, field.label),
+                            )}
+                        </div>
+                    </div>
+
+                </div>
+            </CardContent>
+        </Card>
     );
 }

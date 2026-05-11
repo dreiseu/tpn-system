@@ -23,15 +23,25 @@ import {
 import {
     calculateAge,
     calculateBmi,
+    calculateCalciumContentPerDay,
+    calculateCalciumVolumeMl,
     calculateDextroseCalories,
     calculateDextroseGramsPerDay,
+    calculateDextroseVolumeMl,
     calculateGir,
     calculateInfusionRate,
+    calculateLipidBottleVolumeMl,
     calculateLipidCalories,
     calculateLipidVolumeMl,
+    calculateMagnesiumVolumeMl,
     calculatePerKgPerDay,
+    calculatePhosphorusVolumeMl,
+    calculatePotassiumVolumeMl,
     calculateProteinCalories,
+    calculateProteinVolumeMl,
+    calculateQsVolumeMl,
     calculateRateMlPerHour,
+    calculateSodiumVolumeMl,
     calculateTotalNonProteinCaloriesPerKgDay,
     getPatientName,
     resolveWeightForComputation,
@@ -44,6 +54,16 @@ function displayValue(value?: string | boolean) {
     }
 
     return value || 'N/A';
+}
+
+function formatVolumeDisplay(value?: string | number | null): string {
+    const numericValue = Number(value);
+
+    if (!Number.isFinite(numericValue) || numericValue <= 0) {
+        return '';
+    }
+
+    return numericValue.toFixed(2);
 }
 
 function InfoItem({
@@ -122,14 +142,17 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
         computedWeightKg,
     );
 
-    const proteinCalories = calculateProteinCalories(proteinGramsPerDay);
+    const proteinVolumeMl = calculateProteinVolumeMl(proteinGramsPerDay);
 
     const dextroseGramsPerDay = calculateDextroseGramsPerDay(
         order.total_fluid_ml,
         order.dextrose_percent,
     );
 
-    const dextroseCalories = calculateDextroseCalories(dextroseGramsPerDay);
+    const dextroseVolumeMl = calculateDextroseVolumeMl(
+        order.total_fluid_ml,
+        order.dextrose_percent,
+    );
 
     const gir = calculateGir(
         dextroseGramsPerDay,
@@ -147,12 +170,12 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
         order.lipid_concentration,
     );
 
+    const lipidBottleVolumeMl = calculateLipidBottleVolumeMl(lipidVolumeMl);
+
     const lipidRateMlPerHour = calculateRateMlPerHour(
         lipidVolumeMl,
         order.lipid_duration_hours,
     );
-
-    const lipidCalories = calculateLipidCalories(lipidGramsPerDay);
 
     const sodiumMeqPerDay = calculatePerKgPerDay(
         order.sodium_meq_kg_day,
@@ -164,7 +187,7 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
         computedWeightKg,
     );
 
-    const calciumMgPerDay = calculatePerKgPerDay(
+    const calciumMgPerDay = calculateCalciumContentPerDay(
         order.calcium_mg_kg_day,
         computedWeightKg,
     );
@@ -179,10 +202,44 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
         computedWeightKg,
     );
 
-    const traceElementsMlPerDay = calculatePerKgPerDay(
-        order.trace_elements_ml_kg_day,
-        computedWeightKg,
-    );
+    const sodiumVolumeMl = calculateSodiumVolumeMl(sodiumMeqPerDay);
+    const potassiumVolumeMl = calculatePotassiumVolumeMl(potassiumMeqPerDay);
+    const calciumVolumeMl = calculateCalciumVolumeMl(calciumMgPerDay);
+    const magnesiumVolumeMl = calculateMagnesiumVolumeMl(magnesiumMeqPerDay);
+    const phosphorusVolumeMl = calculatePhosphorusVolumeMl(phosphorusMmolPerDay);
+
+    const traceElementsMlPerDay = order.trace_elements_ml_kg_day || '';
+    const traceElementsVolumeMl = formatVolumeDisplay(traceElementsMlPerDay);
+
+    const multivitaminsVolumeMl = formatVolumeDisplay(order.multivitamins_ml_day);
+
+    const lipidVolumeForQs = order.lipid_piggyback ? lipidVolumeMl : '';
+
+    const qsVolumeMl = calculateQsVolumeMl(order.total_fluid_ml, [
+        proteinVolumeMl,
+        dextroseVolumeMl,
+        lipidVolumeForQs,
+        sodiumVolumeMl,
+        potassiumVolumeMl,
+        calciumVolumeMl,
+        magnesiumVolumeMl,
+        phosphorusVolumeMl,
+        traceElementsVolumeMl,
+        multivitaminsVolumeMl,
+        order.heparin_ml,
+    ]);
+
+    const heparinTotalIu = (() => {
+        const ml = Number(order.heparin_ml) || 0;
+        const iuPerMl = Number(order.heparin_iu_per_ml) || 0;
+        const total = ml * iuPerMl;
+
+        return total > 0 ? total.toFixed(2) : '';
+    })();
+
+    const dextroseCalories = calculateDextroseCalories(dextroseGramsPerDay);
+    const proteinCalories = calculateProteinCalories(proteinGramsPerDay);
+    const lipidCalories = calculateLipidCalories(lipidGramsPerDay);
 
     const totalNonProteinCaloriesPerKgDay =
         calculateTotalNonProteinCaloriesPerKgDay(
@@ -190,6 +247,18 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
             lipidCalories,
             computedWeightKg,
         );
+
+    const osmolarityValue = order.osmolarity_computed_mosm_l || '';
+
+    const osmolarityDisplay = osmolarityValue
+        ? `${osmolarityValue} mOsm/L`
+        : '';
+
+    const osmolarityCalculatorType =
+        order.route === 'Peripheral Line' ? 'PPN' : 'TPN';
+
+    const isPeripheralOsmolarityHigh =
+        order.route === 'Peripheral Line' && Number(osmolarityValue) >= 900;
 
     return (
         <>
@@ -237,232 +306,6 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                         </Button>
                     </div>
                 </div>
-
-                <Card className="rounded-lg border-slate-200 bg-white shadow-sm print:hidden">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-slate-900">
-                            <FlaskConical className="h-5 w-5 text-[#2f7d32]" />
-                            Computation Summary
-                        </CardTitle>
-                        <CardDescription>
-                            Macronutrients, electrolytes, additives, calories,
-                            and osmolarity details for this TPN order.
-                        </CardDescription>
-                    </CardHeader>
-
-                    <CardContent className="space-y-5">
-                        <div className="grid gap-4 lg:grid-cols-3">
-                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                                <h3 className="mb-3 text-sm font-semibold text-[#2f7d32]">
-                                    Protein
-                                </h3>
-
-                                <InfoGrid>
-                                    <InfoItem
-                                        label="Dose"
-                                        value={
-                                            order.protein_g_per_kg_day
-                                                ? `${order.protein_g_per_kg_day} g/kg/day`
-                                                : ''
-                                        }
-                                    />
-                                    <InfoItem
-                                        label="Contents"
-                                        value={
-                                            proteinGramsPerDay
-                                                ? `${proteinGramsPerDay} g/day`
-                                                : ''
-                                        }
-                                    />
-                                    <InfoItem
-                                        label="Calories"
-                                        value={
-                                            proteinCalories
-                                                ? `${proteinCalories} Cal/day`
-                                                : ''
-                                        }
-                                    />
-                                </InfoGrid>
-                            </div>
-
-                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                                <h3 className="mb-3 text-sm font-semibold text-[#2f7d32]">
-                                    Carbohydrates
-                                </h3>
-
-                                <InfoGrid>
-                                    <InfoItem
-                                        label="Dextrose"
-                                        value={
-                                            order.dextrose_percent
-                                                ? `${order.dextrose_percent}%`
-                                                : ''
-                                        }
-                                    />
-                                    <InfoItem
-                                        label="Contents"
-                                        value={
-                                            dextroseGramsPerDay
-                                                ? `${dextroseGramsPerDay} g/day`
-                                                : ''
-                                        }
-                                    />
-                                    <InfoItem
-                                        label="Calories"
-                                        value={
-                                            dextroseCalories
-                                                ? `${dextroseCalories} Cal/day`
-                                                : ''
-                                        }
-                                    />
-                                    <InfoItem
-                                        label="GIR"
-                                        value={gir ? `${gir} mg/kg/min` : ''}
-                                    />
-                                </InfoGrid>
-                            </div>
-
-                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                                <h3 className="mb-3 text-sm font-semibold text-[#2f7d32]">
-                                    Fat
-                                </h3>
-
-                                <InfoGrid>
-                                    <InfoItem
-                                        label="Dose"
-                                        value={
-                                            order.lipid_g_per_kg_day
-                                                ? `${order.lipid_g_per_kg_day} g/kg/day`
-                                                : ''
-                                        }
-                                    />
-                                    <InfoItem
-                                        label="Contents"
-                                        value={
-                                            lipidGramsPerDay
-                                                ? `${lipidGramsPerDay} g/day`
-                                                : ''
-                                        }
-                                    />
-                                    <InfoItem
-                                        label="Volume"
-                                        value={
-                                            lipidVolumeMl
-                                                ? `${lipidVolumeMl} mL`
-                                                : ''
-                                        }
-                                    />
-                                    <InfoItem
-                                        label="Rate"
-                                        value={
-                                            lipidRateMlPerHour
-                                                ? `${lipidRateMlPerHour} mL/hr`
-                                                : ''
-                                        }
-                                    />
-                                    <InfoItem
-                                        label="Calories"
-                                        value={
-                                            lipidCalories
-                                                ? `${lipidCalories} Cal/day`
-                                                : ''
-                                        }
-                                    />
-                                </InfoGrid>
-                            </div>
-                        </div>
-
-                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                            <h3 className="mb-3 text-sm font-semibold text-[#2f7d32]">
-                                Electrolytes and Additives
-                            </h3>
-
-                            <InfoGrid>
-                                <InfoItem
-                                    label="Sodium"
-                                    value={
-                                        sodiumMeqPerDay
-                                            ? `${sodiumMeqPerDay} meqs/day`
-                                            : ''
-                                    }
-                                />
-                                <InfoItem
-                                    label="Potassium"
-                                    value={
-                                        potassiumMeqPerDay
-                                            ? `${potassiumMeqPerDay} meqs/day`
-                                            : ''
-                                    }
-                                />
-                                <InfoItem
-                                    label="Calcium"
-                                    value={
-                                        calciumMgPerDay
-                                            ? `${calciumMgPerDay} meqs/day`
-                                            : ''
-                                    }
-                                />
-                                <InfoItem
-                                    label="Magnesium"
-                                    value={
-                                        magnesiumMeqPerDay
-                                            ? `${magnesiumMeqPerDay} meqs/day`
-                                            : ''
-                                    }
-                                />
-                                <InfoItem
-                                    label="Phosphorus"
-                                    value={
-                                        phosphorusMmolPerDay
-                                            ? `${phosphorusMmolPerDay} mmol/day`
-                                            : ''
-                                    }
-                                />
-                                <InfoItem
-                                    label="Trace Elements"
-                                    value={
-                                        traceElementsMlPerDay
-                                            ? `${traceElementsMlPerDay} mL/day`
-                                            : ''
-                                    }
-                                />
-                                <InfoItem
-                                    label="Multivitamins"
-                                    value={
-                                        order.multivitamins_ml_day
-                                            ? `${order.multivitamins_ml_day} mL/day`
-                                            : ''
-                                    }
-                                />
-                            </InfoGrid>
-                        </div>
-
-                        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
-                            <h3 className="mb-3 text-sm font-semibold text-emerald-900">
-                                Total Non-Protein Calories
-                            </h3>
-
-                            <InfoItem
-                                label="Result"
-                                value={
-                                    totalNonProteinCaloriesPerKgDay
-                                        ? `${totalNonProteinCaloriesPerKgDay} Cal/kg/day`
-                                        : ''
-                                }
-                            />
-                        </div>
-
-                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                            <h3 className="mb-3 text-sm font-semibold text-[#2f7d32]">
-                                Osmolarity Computation
-                            </h3>
-
-                            <p className="text-sm whitespace-pre-wrap text-slate-600">
-                                {order.osmolarity_notes || 'N/A'}
-                            </p>
-                        </div>
-                    </CardContent>
-                </Card>
 
                 <Card className="rounded-lg border-slate-200 bg-white shadow-sm print:hidden">
                     <CardHeader>
@@ -560,44 +403,316 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2 text-slate-900">
                             <FlaskConical className="h-5 w-5 text-[#2f7d32]" />
-                            Formula Preview
+                            Computation Summary
                         </CardTitle>
                         <CardDescription>
-                            Initial macronutrient fields captured from the
-                            order.
+                            Computed macronutrients, electrolytes, additives, calories, and
+                            osmolarity based on the saved order.
                         </CardDescription>
                     </CardHeader>
-                    <CardContent>
-                        <InfoGrid>
-                            <InfoItem
-                                label="Dextrose"
-                                value={
-                                    order.dextrose_percent
-                                        ? `${order.dextrose_percent}%`
-                                        : ''
-                                }
-                            />
-                            <InfoItem
-                                label="Protein Dose"
-                                value={
-                                    order.protein_g_per_kg_day
-                                        ? `${order.protein_g_per_kg_day} g/kg/day`
-                                        : ''
-                                }
-                            />
-                            <InfoItem
-                                label="Lipid Dose"
-                                value={
-                                    order.lipid_g_per_kg_day
-                                        ? `${order.lipid_g_per_kg_day} g/kg/day`
-                                        : ''
-                                }
-                            />
-                            <InfoItem
-                                label="Osmolarity Notes"
-                                value={order.osmolarity_notes}
-                            />
-                        </InfoGrid>
+
+                    <CardContent className="grid gap-5">
+                        <div className="grid gap-4 lg:grid-cols-3">
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                                <h3 className="mb-3 text-sm font-semibold text-[#2f7d32]">
+                                    Protein
+                                </h3>
+                                <InfoGrid>
+                                    <InfoItem
+                                        label="Dose"
+                                        value={
+                                            order.protein_g_per_kg_day
+                                                ? `${order.protein_g_per_kg_day} g/kg/day`
+                                                : ''
+                                        }
+                                    />
+                                    <InfoItem
+                                        label="Contents"
+                                        value={
+                                            proteinGramsPerDay
+                                                ? `${proteinGramsPerDay} g/day`
+                                                : ''
+                                        }
+                                    />
+                                    <InfoItem
+                                        label="Volume"
+                                        value={proteinVolumeMl ? `${proteinVolumeMl} mL` : ''}
+                                    />
+                                    <InfoItem
+                                        label="Calories"
+                                        value={
+                                            proteinCalories
+                                                ? `${proteinCalories} Cal/day`
+                                                : ''
+                                        }
+                                    />
+                                </InfoGrid>
+                            </div>
+
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                                <h3 className="mb-3 text-sm font-semibold text-[#2f7d32]">
+                                    Carbohydrates
+                                </h3>
+                                <InfoGrid>
+                                    <InfoItem
+                                        label="Dextrose"
+                                        value={
+                                            order.dextrose_percent
+                                                ? `${order.dextrose_percent}%`
+                                                : ''
+                                        }
+                                    />
+                                    <InfoItem
+                                        label="Contents"
+                                        value={
+                                            dextroseGramsPerDay
+                                                ? `${dextroseGramsPerDay} g/day`
+                                                : ''
+                                        }
+                                    />
+                                    <InfoItem
+                                        label="Volume"
+                                        value={
+                                            dextroseVolumeMl ? `${dextroseVolumeMl} mL` : ''
+                                        }
+                                    />
+                                    <InfoItem
+                                        label="GIR"
+                                        value={gir ? `${gir} mg/kg/min` : ''}
+                                    />
+                                    <InfoItem
+                                        label="Calories"
+                                        value={
+                                            dextroseCalories
+                                                ? `${dextroseCalories} Cal/day`
+                                                : ''
+                                        }
+                                    />
+                                </InfoGrid>
+                            </div>
+
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                                <h3 className="mb-3 text-sm font-semibold text-[#2f7d32]">
+                                    Fat
+                                </h3>
+                                <InfoGrid>
+                                    <InfoItem
+                                        label="Dose"
+                                        value={
+                                            order.lipid_g_per_kg_day
+                                                ? `${order.lipid_g_per_kg_day} g/kg/day`
+                                                : ''
+                                        }
+                                    />
+                                    <InfoItem
+                                        label="Concentration"
+                                        value={
+                                            order.lipid_concentration
+                                                ? `${order.lipid_concentration}%`
+                                                : ''
+                                        }
+                                    />
+                                    <InfoItem
+                                        label="Contents"
+                                        value={
+                                            lipidGramsPerDay
+                                                ? `${lipidGramsPerDay} g/day`
+                                                : ''
+                                        }
+                                    />
+                                    <InfoItem
+                                        label="Volume"
+                                        value={lipidVolumeMl ? `${lipidVolumeMl} mL` : ''}
+                                    />
+                                    <InfoItem
+                                        label="Bottle Qty"
+                                        value={
+                                            lipidBottleVolumeMl
+                                                ? `${lipidBottleVolumeMl} mL`
+                                                : ''
+                                        }
+                                    />
+                                    <InfoItem
+                                        label="Rate"
+                                        value={
+                                            lipidRateMlPerHour
+                                                ? `${lipidRateMlPerHour} mL/hr`
+                                                : ''
+                                        }
+                                    />
+                                    <InfoItem
+                                        label="Calories"
+                                        value={
+                                            lipidCalories ? `${lipidCalories} Cal/day` : ''
+                                        }
+                                    />
+                                </InfoGrid>
+                            </div>
+                        </div>
+
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                            <h3 className="mb-3 text-sm font-semibold text-[#2f7d32]">
+                                Electrolytes and Additives
+                            </h3>
+
+                            <InfoGrid>
+                                <InfoItem
+                                    label="Sodium"
+                                    value={
+                                        sodiumMeqPerDay || sodiumVolumeMl
+                                            ? `${sodiumMeqPerDay || '—'} meqs/day / ${sodiumVolumeMl || '—'
+                                            } mL`
+                                            : ''
+                                    }
+                                />
+                                <InfoItem
+                                    label="Potassium"
+                                    value={
+                                        potassiumMeqPerDay || potassiumVolumeMl
+                                            ? `${potassiumMeqPerDay || '—'} meqs/day / ${potassiumVolumeMl || '—'
+                                            } mL`
+                                            : ''
+                                    }
+                                />
+                                <InfoItem
+                                    label="Calcium"
+                                    value={
+                                        calciumMgPerDay || calciumVolumeMl
+                                            ? `${calciumMgPerDay || '—'} mg/day / ${calciumVolumeMl || '—'
+                                            } mL`
+                                            : ''
+                                    }
+                                />
+                                <InfoItem
+                                    label="Magnesium"
+                                    value={
+                                        magnesiumMeqPerDay || magnesiumVolumeMl
+                                            ? `${magnesiumMeqPerDay || '—'} meqs/day / ${magnesiumVolumeMl || '—'
+                                            } mL`
+                                            : ''
+                                    }
+                                />
+                                <InfoItem
+                                    label="Phosphorus"
+                                    value={
+                                        phosphorusMmolPerDay || phosphorusVolumeMl
+                                            ? `${phosphorusMmolPerDay || '—'} mmol/day / ${phosphorusVolumeMl || '—'
+                                            } mL`
+                                            : ''
+                                    }
+                                />
+                                <InfoItem
+                                    label="Trace Elements"
+                                    value={
+                                        traceElementsMlPerDay || traceElementsVolumeMl
+                                            ? `${traceElementsMlPerDay || '—'} mL/day / ${traceElementsVolumeMl || '—'
+                                            } mL`
+                                            : ''
+                                    }
+                                />
+                                <InfoItem
+                                    label="Multivitamins"
+                                    value={
+                                        order.multivitamins_ml_day || multivitaminsVolumeMl
+                                            ? `${order.multivitamins_ml_day || '—'} mL/day / ${multivitaminsVolumeMl || '—'
+                                            } mL`
+                                            : ''
+                                    }
+                                />
+                                <InfoItem
+                                    label="Heparin"
+                                    value={
+                                        order.heparin_ml || heparinTotalIu
+                                            ? `${order.heparin_ml || '—'} mL / ${heparinTotalIu || '—'
+                                            } I.U.`
+                                            : ''
+                                    }
+                                />
+                                <InfoItem
+                                    label="QS / Sterile Water"
+                                    value={
+                                        order.sterile_water_level_ml_day
+                                            ? `${order.sterile_water_level_ml_day} mL`
+                                            : qsVolumeMl
+                                                ? `${qsVolumeMl} mL recommended`
+                                                : ''
+                                    }
+                                />
+                            </InfoGrid>
+                        </div>
+
+                        <div className="grid gap-4 lg:grid-cols-2">
+                            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
+                                <h3 className="mb-3 text-sm font-semibold">
+                                    Calorie Summary
+                                </h3>
+
+                                <InfoGrid>
+                                    <InfoItem
+                                        label="Protein Calories"
+                                        value={
+                                            proteinCalories ? `${proteinCalories} Cal/day` : ''
+                                        }
+                                    />
+                                    <InfoItem
+                                        label="Dextrose Calories"
+                                        value={
+                                            dextroseCalories
+                                                ? `${dextroseCalories} Cal/day`
+                                                : ''
+                                        }
+                                    />
+                                    <InfoItem
+                                        label="Lipid Calories"
+                                        value={lipidCalories ? `${lipidCalories} Cal/day` : ''}
+                                    />
+                                    <InfoItem
+                                        label="Non-Protein Calories"
+                                        value={
+                                            totalNonProteinCaloriesPerKgDay
+                                                ? `${totalNonProteinCaloriesPerKgDay} Cal/kg/day`
+                                                : ''
+                                        }
+                                    />
+                                </InfoGrid>
+                            </div>
+
+                            <div
+                                className={[
+                                    'rounded-lg border p-4',
+                                    isPeripheralOsmolarityHigh
+                                        ? 'border-red-200 bg-red-50 text-red-900'
+                                        : 'border-blue-200 bg-blue-50 text-blue-900',
+                                ].join(' ')}
+                            >
+                                <h3 className="mb-3 text-sm font-semibold">
+                                    Osmolarity
+                                </h3>
+
+                                <InfoGrid>
+                                    <InfoItem
+                                        label="Result"
+                                        value={osmolarityDisplay}
+                                    />
+                                    <InfoItem
+                                        label="Calculator"
+                                        value={osmolarityCalculatorType}
+                                    />
+                                    <InfoItem label="Route" value={order.route} />
+                                    <InfoItem
+                                        label="Notes"
+                                        value={order.osmolarity_notes}
+                                    />
+                                </InfoGrid>
+
+                                {isPeripheralOsmolarityHigh ? (
+                                    <div className="mt-3 rounded-lg border border-red-200 bg-white px-4 py-3 text-sm font-semibold text-red-700">
+                                        Peripheral line osmolarity is above the recommended
+                                        limit.
+                                    </div>
+                                ) : null}
+                            </div>
+                        </div>
                     </CardContent>
                 </Card>
             </div>

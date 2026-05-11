@@ -33,8 +33,13 @@ class TpnOrderComputation extends Model
 
         'trace_elements_ml_kg_day',
         'multivitamins_ml_day',
+        'heparin_ml',
+        'heparin_iu_per_ml',
+        'sterile_water_level_ml_day',
 
         'osmolarity_notes',
+        'osmolarity_inputs_json',
+        'osmolarity_computed_mosm_l',
 
         'date_created',
         'date_modified',
@@ -59,6 +64,10 @@ class TpnOrderComputation extends Model
 
         'trace_elements_ml_kg_day' => 'decimal:2',
         'multivitamins_ml_day' => 'decimal:2',
+        'heparin_ml' => 'decimal:2',
+        'heparin_iu_per_ml' => 'decimal:2',
+        'sterile_water_level_ml_day' => 'decimal:2',
+        'osmolarity_computed_mosm_l' => 'decimal:2',
 
         'date_created' => 'datetime',
         'date_modified' => 'datetime',

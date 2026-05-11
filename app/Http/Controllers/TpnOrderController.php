@@ -74,6 +74,20 @@ class TpnOrderController extends Controller
         ]);
     }
 
+    public function tpnLabel(): Response
+    {
+        return Inertia::render('labels/tpn', [
+            'orders' => $this->labelOrders(),
+        ]);
+    }
+
+    public function lipidsLabel(): Response
+    {
+        return Inertia::render('labels/lipids', [
+            'orders' => $this->labelOrders(),
+        ]);
+    }
+
     public function store(StoreTpnOrderRequest $request): RedirectResponse
     {
         $validated = $request->validated();
@@ -139,11 +153,38 @@ class TpnOrderController extends Controller
             ]);
     }
 
+    public function destroy(TpnOrder $order): RedirectResponse
+    {
+        $orderNo = $order->order_no;
+
+        DB::transaction(function () use ($order) {
+            $order->statusHistory()->delete();
+            $order->computation()->delete();
+            $order->delete();
+        });
+
+        return redirect()
+            ->route('orders.index')
+            ->with('toast', [
+                'type' => 'success',
+                'message' => "TPN order {$orderNo} has been deleted.",
+            ]);
+    }
+
     private function generateOrderNumber(): string
     {
         $result = DB::select('EXEC spGenerateTpnOrderNumber');
 
         return $result[0]->order_no;
+    }
+
+    private function labelOrders()
+    {
+        return TpnOrder::query()
+            ->with('computation')
+            ->orderByDesc('tpn_order_id')
+            ->get()
+            ->map(fn(TpnOrder $order) => $this->formatOrderForFrontend($order));
     }
 
     private function orderAttributes(array $validated, ?int $userId, Carbon $now, bool $creating = false): array
@@ -207,8 +248,13 @@ class TpnOrderController extends Controller
 
             'trace_elements_ml_kg_day' => $validated['trace_elements_ml_kg_day'] ?? null,
             'multivitamins_ml_day' => $validated['multivitamins_ml_day'] ?? null,
+            'heparin_ml' => $validated['heparin_ml'] ?? null,
+            'heparin_iu_per_ml' => $validated['heparin_iu_per_ml'] ?? null,
+            'sterile_water_level_ml_day' => $validated['sterile_water_level_ml_day'] ?? null,
 
             'osmolarity_notes' => $validated['osmolarity_notes'] ?? null,
+            'osmolarity_inputs_json' => $validated['osmolarity_inputs_json'] ?? null,
+            'osmolarity_computed_mosm_l' => $validated['osmolarity_computed_mosm_l'] ?? null,
 
             'date_modified' => $now,
         ];
@@ -223,6 +269,9 @@ class TpnOrderController extends Controller
     private function formatOrderForFrontend(TpnOrder $order): array
     {
         $computation = $order->computation;
+        $osmolarityFields = $this->osmolarityJsonToFormFields(
+            $computation?->osmolarity_inputs_json,
+        );
 
         return [
             'id' => $order->tpn_order_id,
@@ -274,8 +323,204 @@ class TpnOrderController extends Controller
 
             'trace_elements_ml_kg_day' => $this->decimalToString($computation?->trace_elements_ml_kg_day),
             'multivitamins_ml_day' => $this->decimalToString($computation?->multivitamins_ml_day),
-        
+            'heparin_ml' => $this->decimalToString($computation?->heparin_ml),
+            'heparin_iu_per_ml' => $this->decimalToString($computation?->heparin_iu_per_ml),
+            'sterile_water_level_ml_day' => $this->decimalToString($computation?->sterile_water_level_ml_day),
+
+            ...$osmolarityFields,
+
             'osmolarity_notes' => $computation?->osmolarity_notes ?? '',
+            'osmolarity_inputs_json' => $computation?->osmolarity_inputs_json ?? '',
+            'osmolarity_computed_mosm_l' => $this->decimalToString(
+                $computation?->osmolarity_computed_mosm_l,
+            ),
+        ];
+    }
+
+    private function osmolarityJsonToFormFields(?string $json): array
+    {
+        $defaults = [
+            'osmolarity_ppn_solution' => '',
+            'osmolarity_ppn_volume_ml' => '',
+            'osmolarity_ppn_lock_total_volume' => 'no',
+
+            'osmolarity_amino_acid_10_grams' => '',
+            'osmolarity_amino_acid_15_grams' => '',
+            'osmolarity_dextrose_concentration' => '',
+            'osmolarity_dextrose_grams' => '',
+            'osmolarity_hepatamine_8_grams' => '',
+            'osmolarity_lipid_10_ml' => '',
+            'osmolarity_lipid_20_ml' => '',
+            'osmolarity_novamine_15_grams' => '',
+            'osmolarity_sterile_water_ml' => '',
+
+            'osmolarity_calcium_gluconate_10_ml' => '',
+            'osmolarity_calcium_chloride_10_ml' => '',
+            'osmolarity_magnesium_sulfate_ml' => '',
+            'osmolarity_multi_trace_elements_ml' => '',
+            'osmolarity_multivitamin_12_ml' => '',
+            'osmolarity_potassium_acetate_ml' => '',
+            'osmolarity_potassium_chloride_ml' => '',
+            'osmolarity_potassium_phosphate_ml' => '',
+            'osmolarity_sodium_acetate_ml' => '',
+            'osmolarity_sodium_bicarbonate_4_2_ml' => '',
+            'osmolarity_sodium_bicarbonate_7_5_ml' => '',
+            'osmolarity_sodium_bicarbonate_8_4_ml' => '',
+            'osmolarity_sodium_chloride_14_6_ml' => '',
+            'osmolarity_sodium_chloride_23_4_ml' => '',
+            'osmolarity_sodium_phosphate_ml' => '',
+        ];
+
+        if (!$json) {
+            return $defaults;
+        }
+
+        $decoded = json_decode($json, true);
+
+        if (!is_array($decoded)) {
+            return $defaults;
+        }
+
+        return [
+            ...$defaults,
+
+            'osmolarity_ppn_solution' => (string) data_get(
+                $decoded,
+                'ppn.solution',
+                $defaults['osmolarity_ppn_solution'],
+            ),
+            'osmolarity_ppn_volume_ml' => (string) data_get(
+                $decoded,
+                'ppn.volume_ml',
+                $defaults['osmolarity_ppn_volume_ml'],
+            ),
+            'osmolarity_ppn_lock_total_volume' => (string) data_get(
+                $decoded,
+                'ppn.lock_total_volume',
+                $defaults['osmolarity_ppn_lock_total_volume'],
+            ),
+
+            'osmolarity_amino_acid_10_grams' => (string) data_get(
+                $decoded,
+                'tpn.amino_acid_10_grams',
+                $defaults['osmolarity_amino_acid_10_grams'],
+            ),
+            'osmolarity_amino_acid_15_grams' => (string) data_get(
+                $decoded,
+                'tpn.amino_acid_15_grams',
+                $defaults['osmolarity_amino_acid_15_grams'],
+            ),
+            'osmolarity_dextrose_concentration' => (string) data_get(
+                $decoded,
+                'tpn.dextrose_concentration',
+                $defaults['osmolarity_dextrose_concentration'],
+            ),
+            'osmolarity_dextrose_grams' => (string) data_get(
+                $decoded,
+                'tpn.dextrose_grams',
+                $defaults['osmolarity_dextrose_grams'],
+            ),
+            'osmolarity_hepatamine_8_grams' => (string) data_get(
+                $decoded,
+                'tpn.hepatamine_8_grams',
+                $defaults['osmolarity_hepatamine_8_grams'],
+            ),
+            'osmolarity_lipid_10_ml' => (string) data_get(
+                $decoded,
+                'tpn.lipid_10_ml',
+                $defaults['osmolarity_lipid_10_ml'],
+            ),
+            'osmolarity_lipid_20_ml' => (string) data_get(
+                $decoded,
+                'tpn.lipid_20_ml',
+                $defaults['osmolarity_lipid_20_ml'],
+            ),
+            'osmolarity_novamine_15_grams' => (string) data_get(
+                $decoded,
+                'tpn.novamine_15_grams',
+                $defaults['osmolarity_novamine_15_grams'],
+            ),
+            'osmolarity_sterile_water_ml' => (string) data_get(
+                $decoded,
+                'tpn.sterile_water_ml',
+                $defaults['osmolarity_sterile_water_ml'],
+            ),
+
+            'osmolarity_calcium_gluconate_10_ml' => (string) data_get(
+                $decoded,
+                'additives.calcium_gluconate_10_ml',
+                $defaults['osmolarity_calcium_gluconate_10_ml'],
+            ),
+            'osmolarity_calcium_chloride_10_ml' => (string) data_get(
+                $decoded,
+                'additives.calcium_chloride_10_ml',
+                $defaults['osmolarity_calcium_chloride_10_ml'],
+            ),
+            'osmolarity_magnesium_sulfate_ml' => (string) data_get(
+                $decoded,
+                'additives.magnesium_sulfate_ml',
+                $defaults['osmolarity_magnesium_sulfate_ml'],
+            ),
+            'osmolarity_multi_trace_elements_ml' => (string) data_get(
+                $decoded,
+                'additives.multi_trace_elements_ml',
+                $defaults['osmolarity_multi_trace_elements_ml'],
+            ),
+            'osmolarity_multivitamin_12_ml' => (string) data_get(
+                $decoded,
+                'additives.multivitamin_12_ml',
+                $defaults['osmolarity_multivitamin_12_ml'],
+            ),
+            'osmolarity_potassium_acetate_ml' => (string) data_get(
+                $decoded,
+                'additives.potassium_acetate_ml',
+                $defaults['osmolarity_potassium_acetate_ml'],
+            ),
+            'osmolarity_potassium_chloride_ml' => (string) data_get(
+                $decoded,
+                'additives.potassium_chloride_ml',
+                $defaults['osmolarity_potassium_chloride_ml'],
+            ),
+            'osmolarity_potassium_phosphate_ml' => (string) data_get(
+                $decoded,
+                'additives.potassium_phosphate_ml',
+                $defaults['osmolarity_potassium_phosphate_ml'],
+            ),
+            'osmolarity_sodium_acetate_ml' => (string) data_get(
+                $decoded,
+                'additives.sodium_acetate_ml',
+                $defaults['osmolarity_sodium_acetate_ml'],
+            ),
+            'osmolarity_sodium_bicarbonate_4_2_ml' => (string) data_get(
+                $decoded,
+                'additives.sodium_bicarbonate_4_2_ml',
+                $defaults['osmolarity_sodium_bicarbonate_4_2_ml'],
+            ),
+            'osmolarity_sodium_bicarbonate_7_5_ml' => (string) data_get(
+                $decoded,
+                'additives.sodium_bicarbonate_7_5_ml',
+                $defaults['osmolarity_sodium_bicarbonate_7_5_ml'],
+            ),
+            'osmolarity_sodium_bicarbonate_8_4_ml' => (string) data_get(
+                $decoded,
+                'additives.sodium_bicarbonate_8_4_ml',
+                $defaults['osmolarity_sodium_bicarbonate_8_4_ml'],
+            ),
+            'osmolarity_sodium_chloride_14_6_ml' => (string) data_get(
+                $decoded,
+                'additives.sodium_chloride_14_6_ml',
+                $defaults['osmolarity_sodium_chloride_14_6_ml'],
+            ),
+            'osmolarity_sodium_chloride_23_4_ml' => (string) data_get(
+                $decoded,
+                'additives.sodium_chloride_23_4_ml',
+                $defaults['osmolarity_sodium_chloride_23_4_ml'],
+            ),
+            'osmolarity_sodium_phosphate_ml' => (string) data_get(
+                $decoded,
+                'additives.sodium_phosphate_ml',
+                $defaults['osmolarity_sodium_phosphate_ml'],
+            ),
         ];
     }
 

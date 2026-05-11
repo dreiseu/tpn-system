@@ -13,6 +13,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 
 import { OrderExportSheet } from '@/components/orders/order-export-sheet';
+import ConfirmationDialog from '@/components/ui/confirmation-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -71,6 +72,7 @@ export default function OrdersIndex({
     const [status, setStatus] = useState<TpnOrderStatus | 'All'>('All');
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editingOrder, setEditingOrder] = useState<TpnOrder | null>(null);
+    const [deletingOrder, setDeletingOrder] = useState<TpnOrder | null>(null);
     const [exportingOrder, setExportingOrder] = useState<TpnOrder | null>(null);
 
     const [currentPage, setCurrentPage] = useState(1);
@@ -125,9 +127,18 @@ export default function OrdersIndex({
     }
 
     function handleDelete(order: TpnOrder) {
-        window.alert(
-            `Delete is not connected to the database yet for ${order.order_no} (${getPatientName(order)}).`,
-        );
+        setDeletingOrder(order);
+    }
+
+    function confirmDelete() {
+        if (!deletingOrder) {
+            return;
+        }
+
+        router.delete(`/orders/${deletingOrder.id}`, {
+            preserveScroll: true,
+            onFinish: () => setDeletingOrder(null),
+        });
     }
 
     function handleShow(order: TpnOrder) {
@@ -561,6 +572,24 @@ export default function OrdersIndex({
             {exportingOrder ? (
                 <OrderExportSheet order={exportingOrder} />
             ) : null}
+
+            <ConfirmationDialog
+                open={Boolean(deletingOrder)}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setDeletingOrder(null);
+                    }
+                }}
+                title="Delete this TPN order?"
+                description={
+                    deletingOrder
+                        ? `${deletingOrder.order_no} for ${getPatientName(deletingOrder) || 'this patient'} will be permanently removed. This cannot be undone.`
+                        : undefined
+                }
+                confirmLabel="Delete"
+                cancelLabel="Cancel"
+                onConfirm={confirmDelete}
+            />
         </>
     );
 }

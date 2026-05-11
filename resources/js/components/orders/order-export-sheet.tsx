@@ -291,6 +291,17 @@ export function OrderExportSheet({
         heparinMl && heparinIu ? Number(heparinMl) * Number(heparinIu) : '';
     const orderDateTime = splitOrderDateTime(order.order_date);
 
+    // Compute Osmolarity for the printout using the existing variables from above!
+    const osmolarityValue = value((order as any).osmolarity_computed_mosm_l);
+
+    const osmolarityDisplay = osmolarityValue
+        ? `${osmolarityValue} mOsm/L`
+        : '';
+
+    const isPeripheralOsmolarityHigh =
+        order.route === 'Peripheral Line' &&
+        Number(osmolarityValue) >= 900;
+
     return (
         <section
             id="tpn-export-sheet"
@@ -380,7 +391,7 @@ export function OrderExportSheet({
                 }
 
                 .tpn-export-form-title {
-                    margin-top: 24px;
+                    margin-top: 8px;
                     margin-bottom: 16px;
                     font-size: 14px;
                     font-weight: 700;
@@ -872,6 +883,7 @@ export function OrderExportSheet({
                             mL/hr. to run over 24 hrs
                         </span>
                     </div>
+                    
                 </div>
 
                 <div style={{ marginTop: '14px', fontWeight: 'bold' }}>
@@ -1024,9 +1036,6 @@ export function OrderExportSheet({
                                     Fat
                                 </div>
                                 <div style={{ paddingLeft: '16px' }}>
-                                    <BoxCheck
-                                        checked={!!order.lipid_g_per_kg_day}
-                                    />{' '}
                                     <BlankLine
                                         width="35px"
                                         text={order.lipid_g_per_kg_day}
@@ -1294,155 +1303,97 @@ export function OrderExportSheet({
                             );
                         })}
 
-                        {/* Trace Elements */}
+                        {/* Additives Header */}
                         <tr>
-                            <td className="tpn-col-comp">
-                                <div
-                                    style={{
-                                        fontWeight: 'bold',
-                                        marginBottom: '2px',
-                                    }}
-                                >
-                                    Trace Elements
-                                </div>
-                                <div style={{ paddingLeft: '16px' }}>
-                                    <BlankLine
-                                        width="30px"
-                                        text={order.trace_elements_ml_kg_day}
-                                    />{' '}
-                                    mL/kg/day{' '}
-                                    <span
-                                        style={{
-                                            fontSize: '14px',
-                                            margin: '0 4px',
-                                        }}
-                                    >
-                                        X
-                                    </span>{' '}
-                                    <BlankLine
-                                        width="30px"
-                                        text={weightForComputation}
-                                    />{' '}
-                                    kg
-                                </div>
-                            </td>
                             <td
-                                colSpan={2}
+                                className="tpn-col-comp"
                                 style={{
-                                    verticalAlign: 'bottom',
-                                    paddingBottom: '16px',
-                                    textAlign: 'center',
+                                    borderBottom: 'none',
+                                    paddingBottom: '2px',
+                                    paddingTop: '8px',
                                 }}
                             >
+                                <div style={{ fontWeight: 'bold' }}>
+                                    Additives
+                                </div>
+                            </td>
+                            <td colSpan={2} style={{ borderBottom: 'none' }}></td>
+                        </tr>
+
+                        {/* Trace Elements */}
+                        <tr>
+                            <td className="tpn-col-comp" style={{ paddingLeft: '16px', borderTop: 'none', borderBottom: 'none', paddingTop: '2px', paddingBottom: '2px' }}>
+                                <span style={{ display: 'inline-block', width: '90px', fontWeight: 'bold' }}>
+                                    Trace Elements
+                                </span>
+                                <BlankLine width="30px" text={order.trace_elements_ml_kg_day} /> mL/kg/day{' '}
+                                <span style={{ fontSize: '14px', margin: '0 4px' }}>X</span>{' '}
+                                <BlankLine width="30px" text={weightForComputation} /> kg
+                            </td>
+                            <td colSpan={2} style={{ borderTop: 'none', borderBottom: 'none', paddingTop: '2px', paddingBottom: '2px', textAlign: 'center' }}>
                                 <BlankLine
                                     width="45px"
                                     text={
                                         order.trace_elements_ml_kg_day
-                                            ? String(
-                                                  Number(
-                                                      order.trace_elements_ml_kg_day,
-                                                  ) *
-                                                      Number(
-                                                          weightForComputation ||
-                                                              0,
-                                                      ),
-                                              )
+                                            ? String(Number(order.trace_elements_ml_kg_day) * Number(weightForComputation || 0))
                                             : ''
                                     }
                                 />{' '}
-                                mL/day
+                                mL
                             </td>
                         </tr>
 
                         {/* Multivitamins */}
                         <tr>
-                            <td className="tpn-col-comp">
-                                <div
-                                    style={{
-                                        fontWeight: 'bold',
-                                        marginBottom: '2px',
-                                    }}
-                                >
+                            <td className="tpn-col-comp" style={{ paddingLeft: '16px', borderTop: 'none', borderBottom: 'none', paddingTop: '2px', paddingBottom: '2px' }}>
+                                <span style={{ display: 'inline-block', width: '90px', fontWeight: 'bold' }}>
                                     Multivitamins
-                                </div>
-                                <div style={{ paddingLeft: '16px' }}>
-                                    <BlankLine
-                                        width="30px"
-                                        text={order.multivitamins_ml_day}
-                                    />{' '}
-                                    mL/day
-                                </div>
+                                </span>
+                                <BlankLine width="30px" text={order.multivitamins_ml_day} /> mL/day
                             </td>
-                            <td
-                                colSpan={2}
-                                style={{
-                                    verticalAlign: 'bottom',
-                                    paddingBottom: '16px',
-                                    textAlign: 'center',
-                                }}
-                            >
-                                <BlankLine
-                                    width="45px"
-                                    text={order.multivitamins_ml_day}
-                                />{' '}
-                                mL/day
+                            <td colSpan={2} style={{ borderTop: 'none', borderBottom: 'none', paddingTop: '2px', paddingBottom: '2px', textAlign: 'center' }}>
+                                <BlankLine width="45px" text={order.multivitamins_ml_day} /> mL
                             </td>
                         </tr>
 
                         {/* Heparin */}
                         <tr>
-                            <td className="tpn-col-comp">
-                                <div
-                                    style={{
-                                        fontWeight: 'bold',
-                                        marginBottom: '2px',
-                                    }}
-                                >
+                            <td className="tpn-col-comp" style={{ paddingLeft: '16px', borderTop: 'none', borderBottom: '1px solid #000', paddingTop: '2px', paddingBottom: '8px' }}>
+                                <span style={{ display: 'inline-block', width: '90px', fontWeight: 'bold' }}>
                                     Heparin
-                                </div>
-                                <div style={{ paddingLeft: '16px' }}>
-                                    <BlankLine width="30px" text={heparinMl} />{' '}
-                                    mL{' '}
-                                    <span
-                                        style={{
-                                            fontSize: '14px',
-                                            margin: '0 4px',
-                                        }}
-                                    >
-                                        X
-                                    </span>{' '}
-                                    <BlankLine width="30px" text={heparinIu} />{' '}
-                                    I.U./ml
-                                </div>
+                                </span>
+                                <BlankLine width="30px" text={order.heparin_ml} /> mL{' '}
+                                <span style={{ fontSize: '14px', margin: '0 4px' }}>X</span>{' '}
+                                <BlankLine width="30px" text={order.heparin_iu_per_ml} /> I.U./ml
                             </td>
-                            <td
-                                colSpan={2}
-                                style={{
-                                    verticalAlign: 'bottom',
-                                    paddingBottom: '16px',
-                                    textAlign: 'center',
-                                }}
-                            >
-                                <BlankLine width="35px" text={heparinTotal} />{' '}
-                                I.U.
+                            <td colSpan={2} style={{ borderTop: 'none', borderBottom: '1px solid #000', paddingTop: '2px', paddingBottom: '8px', textAlign: 'center' }}>
+                                <BlankLine
+                                    width="45px"
+                                    text={
+                                        order.heparin_ml && order.heparin_iu_per_ml
+                                            ? String(Number(order.heparin_ml) * Number(order.heparin_iu_per_ml))
+                                            : ''
+                                    }
+                                /> I.U.
                             </td>
                         </tr>
 
                         {/* Sterile Water */}
                         <tr>
                             <td
-                                colSpan={2}
+                                className="tpn-col-comp"
                                 style={{
-                                    textAlign: 'right',
+                                    textAlign: 'left',
                                     fontWeight: 'bold',
                                     paddingRight: '20px',
+                                    paddingTop: '8px',
+                                    paddingBottom: '8px'
                                 }}
                             >
-                                Sterile Water / QS =
+                                Sterile Water / QS
                             </td>
-                            <td className="tpn-col-vol">
-                                <BlankLine width="45px" text={qsVolumeMl} />{' '}
-                                mL/day
+                            <td colSpan={2} style={{ paddingTop: '8px', paddingBottom: '8px', textAlign: 'center' }}>
+                                <BlankLine width="45px" text={qsVolumeMl} /> mL
                             </td>
                         </tr>
                     </tbody>
@@ -1512,21 +1463,160 @@ export function OrderExportSheet({
                         }}
                     >
                         Osmolarity Computation:
-                        <span style={{ fontWeight: 'normal' }}>
-                            <BlankLine
-                                width="300px"
-                                text={order.osmolarity_notes}
-                            />
-                        </span>
+
+                        <strong
+                            style={{
+                                borderBottom: '1px solid #000',
+                                padding: '0 8px',
+                                minWidth: '80px',
+                                textAlign: 'center',
+                                fontSize: '12px',
+                            }}
+                        >
+                            {osmolarityDisplay || '\u00a0'}
+                        </strong>
+
+                        {order.osmolarity_notes ? (
+                            <span
+                                style={{
+                                    fontWeight: 'normal',
+                                    fontStyle: 'italic',
+                                    marginLeft: '12px',
+                                }}
+                            >
+                                (Notes: {order.osmolarity_notes})
+                            </span>
+                        ) : null}
                     </div>
                 </div>
 
-                <div className="tpn-export-footer-container">
-                    <div>Page 1 of 1</div>
-                    <div style={{ textAlign: 'right' }}>
-                        Generated by {order.prescribing_physician || 'System'}
-                        <br />
-                        on {new Date().toLocaleDateString()}
+                {/* --- PHARMACY SIGNATURES SECTION (TWO COLUMNS) --- */}
+                <div
+                    style={{
+                        marginTop: '8px',
+                        fontSize: '11px',
+                        pageBreakInside: 'avoid',
+                    }}
+                >
+                    <div style={{ display: 'flex', gap: '48px' }}>
+
+                        {/* ======================= */}
+                        {/* LEFT COLUMN             */}
+                        {/* ======================= */}
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+
+                            {/* LEFT HEADER */}
+                            <div style={{ fontWeight: 'bold' }}>
+                                To be filled up by Pharmacy only:
+                            </div>
+
+                            {/* A. Preparation */}
+                            <div>
+                                <div style={{ fontWeight: 'bold', marginBottom: '2px' }}>A. Preparation</div>
+                                <div style={{ display: 'flex', gap: '4px' }}>
+                                    <div style={{ display: 'flex', gap: '8px', flex: 1, paddingLeft: '14px' }}>
+                                        <span>Date:</span>
+                                        <span style={{ borderBottom: '1px solid #000', flex: 0.5 }}></span>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '8px', flex: 1 }}>
+                                        <span>Time:</span>
+                                        <span style={{ borderBottom: '1px solid #000', flex: 0.5 }}></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* B. Expiration */}
+                            <div>
+                                <div style={{ fontWeight: 'bold', marginBottom: '2px' }}>B. Expiration</div>
+                                <div style={{ display: 'flex', gap: '4px' }}>
+                                    <div style={{ display: 'flex', gap: '8px', flex: 1, paddingLeft: '14px' }}>
+                                        <span>Date:</span>
+                                        <span style={{ borderBottom: '1px solid #000', flex: 0.5 }}></span>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '8px', flex: 1 }}>
+                                        <span>Time:</span>
+                                        <span style={{ borderBottom: '1px solid #000', flex: 0.5 }}></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Prepared By + Date */}
+                            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', flex: 2 }}>
+                                    <span style={{ fontWeight: 'bold', marginRight: '8px', whiteSpace: 'nowrap' }}>Prepared by:</span>
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ borderBottom: '1px solid #000', height: '10px' }}></div> {/* Reduced height */}
+                                        <div style={{ textAlign: 'center', fontSize: '9px', lineHeight: '1.2', marginTop: '2px' }}>
+                                            Signature over Printed Name<br />
+                                            <strong>Pharmacist</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', flex: 1 }}>
+                                    <span style={{ marginRight: '8px' }}>Date:</span>
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ borderBottom: '1px solid #000', height: '10px' }}></div>
+                                        <div style={{ textAlign: 'center', fontSize: '9px', marginTop: '2px' }}>(mm/dd/yyyy)</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+
+
+                        {/* ======================= */}
+                        {/* RIGHT COLUMN            */}
+                        {/* ======================= */}
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+                            {/* RIGHT HEADER */}
+                            <div style={{ fontWeight: 'bold' }}>
+                                For INITIAL ORDERS:
+                            </div>
+
+                            {/* Approved By + Date */}
+                            <div style={{ display: 'flex', gap: '12px' }}>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', flex: 2 }}>
+                                    <span style={{ fontWeight: 'bold', marginRight: '8px', whiteSpace: 'nowrap' }}>Approved by:</span>
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ borderBottom: '1px solid #000', height: '10px' }}></div>
+                                        <div style={{ textAlign: 'center', fontSize: '9px', lineHeight: '1.2', marginTop: '2px' }}>
+                                            Signature over Printed Name<br />
+                                            <strong>Neonatologist</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', flex: 1 }}>
+                                    <span style={{ marginRight: '8px' }}>Date:</span>
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ borderBottom: '1px solid #000', height: '10px' }}></div>
+                                        <div style={{ textAlign: 'center', fontSize: '9px', marginTop: '2px' }}>(mm/dd/yyyy)</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Received By + Date */}
+                            <div style={{ display: 'flex', gap: '12px' }}>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', flex: 2 }}>
+                                    <span style={{ fontWeight: 'bold', marginRight: '8px', whiteSpace: 'nowrap' }}>Received by:</span>
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ borderBottom: '1px solid #000', height: '10px' }}></div>
+                                        <div style={{ textAlign: 'center', fontSize: '9px', lineHeight: '1.2', marginTop: '2px' }}>
+                                            Signature over Printed Name<br />
+                                            <strong>Nurse-on-duty</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', flex: 1 }}>
+                                    <span style={{ marginRight: '8px' }}>Date:</span>
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ borderBottom: '1px solid #000', height: '10px' }}></div>
+                                        <div style={{ textAlign: 'center', fontSize: '9px', marginTop: '2px' }}>(mm/dd/yyyy)</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
                     </div>
                 </div>
             </div>
