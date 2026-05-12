@@ -6,12 +6,11 @@ import {
     Droplets,
     FlaskConical,
     Pencil,
-    UserRound,
 } from 'lucide-react';
 import { useState } from 'react';
 
-import { OrderRegistrationDialog } from '@/components/orders/order-registration-dialog';
 import { OrderExportSheet } from '@/components/orders/order-export-sheet';
+import { OrderRegistrationDialog } from '@/components/orders/order-registration-dialog';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -66,6 +65,46 @@ function formatVolumeDisplay(value?: string | number | null): string {
     return numericValue.toFixed(2);
 }
 
+function formatContentDisplay(value?: string | number | null): string {
+    const numericValue = Number(value);
+
+    if (!Number.isFinite(numericValue) || numericValue <= 0) {
+        return '';
+    }
+
+    return numericValue.toFixed(1);
+}
+
+function formatQsCalculationValue(value?: string | number | null): string {
+    const numericValue = Number(value);
+
+    if (!Number.isFinite(numericValue)) {
+        return '';
+    }
+
+    return numericValue.toFixed(1);
+}
+
+function formatSterileWaterDisplay(value?: string | number | null): string {
+    const numericValue = Number(value);
+
+    if (!Number.isFinite(numericValue)) {
+        return '';
+    }
+
+    return numericValue.toFixed(1);
+}
+
+function withUnit(
+    value: string | number | null | undefined,
+    unit: string,
+    formatter = formatContentDisplay,
+): string {
+    const formattedValue = formatter(value);
+
+    return formattedValue ? `${formattedValue} ${unit}` : '';
+}
+
 function InfoItem({
     label,
     value,
@@ -87,7 +126,9 @@ function InfoItem({
 
 function InfoGrid({ children }: { children: React.ReactNode }) {
     return (
-        <dl className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">{children}</dl>
+        <dl className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+            {children}
+        </dl>
     );
 }
 
@@ -206,28 +247,35 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
     const potassiumVolumeMl = calculatePotassiumVolumeMl(potassiumMeqPerDay);
     const calciumVolumeMl = calculateCalciumVolumeMl(calciumMgPerDay);
     const magnesiumVolumeMl = calculateMagnesiumVolumeMl(magnesiumMeqPerDay);
-    const phosphorusVolumeMl = calculatePhosphorusVolumeMl(phosphorusMmolPerDay);
+    const phosphorusVolumeMl = calculatePhosphorusVolumeMl(
+        phosphorusMmolPerDay,
+    );
 
     const traceElementsMlPerDay = order.trace_elements_ml_kg_day || '';
     const traceElementsVolumeMl = formatVolumeDisplay(traceElementsMlPerDay);
 
-    const multivitaminsVolumeMl = formatVolumeDisplay(order.multivitamins_ml_day);
+    const multivitaminsVolumeMl = formatVolumeDisplay(
+        order.multivitamins_ml_day,
+    );
 
     const lipidVolumeForQs = order.lipid_piggyback ? lipidVolumeMl : '';
 
-    const qsVolumeMl = calculateQsVolumeMl(order.total_fluid_ml, [
-        proteinVolumeMl,
-        dextroseVolumeMl,
-        lipidVolumeForQs,
-        sodiumVolumeMl,
-        potassiumVolumeMl,
-        calciumVolumeMl,
-        magnesiumVolumeMl,
-        phosphorusVolumeMl,
-        traceElementsVolumeMl,
-        multivitaminsVolumeMl,
-        order.heparin_ml,
-    ]);
+    const qsVolumeMl = calculateQsVolumeMl(
+        formatQsCalculationValue(order.total_fluid_ml),
+        [
+            formatQsCalculationValue(proteinVolumeMl),
+            formatQsCalculationValue(dextroseVolumeMl),
+            formatQsCalculationValue(lipidVolumeForQs),
+            formatQsCalculationValue(sodiumVolumeMl),
+            formatQsCalculationValue(potassiumVolumeMl),
+            formatQsCalculationValue(calciumVolumeMl),
+            formatQsCalculationValue(magnesiumVolumeMl),
+            formatQsCalculationValue(phosphorusVolumeMl),
+            formatQsCalculationValue(traceElementsVolumeMl),
+            formatQsCalculationValue(multivitaminsVolumeMl),
+            formatQsCalculationValue(order.heparin_ml),
+        ],
+    );
 
     const heparinTotalIu = (() => {
         const ml = Number(order.heparin_ml) || 0;
@@ -259,6 +307,11 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
 
     const isPeripheralOsmolarityHigh =
         order.route === 'Peripheral Line' && Number(osmolarityValue) >= 900;
+
+    const sterileWaterDisplay =
+        String(order.sterile_water_level_ml_day ?? '').trim() !== ''
+            ? formatSterileWaterDisplay(order.sterile_water_level_ml_day)
+            : formatSterileWaterDisplay(qsVolumeMl);
 
     return (
         <>
@@ -317,41 +370,29 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                             Clinical basis used to review and formulate the TPN.
                         </CardDescription>
                     </CardHeader>
+
                     <CardContent>
                         <InfoGrid>
                             <InfoItem
                                 label="Birth Weight"
-                                value={
-                                    order.birth_weight_kg
-                                        ? `${order.birth_weight_kg} kg`
-                                        : ''
-                                }
+                                value={withUnit(order.birth_weight_kg, 'kg')}
                             />
                             <InfoItem
                                 label="Current Weight"
-                                value={
-                                    order.current_weight_kg
-                                        ? `${order.current_weight_kg} kg`
-                                        : ''
-                                }
+                                value={withUnit(order.current_weight_kg, 'kg')}
                             />
                             <InfoItem
                                 label="Weight Used"
-                                value={
-                                    computedWeightKg
-                                        ? `${computedWeightKg} kg`
-                                        : ''
-                                }
+                                value={withUnit(computedWeightKg, 'kg')}
                             />
                             <InfoItem
                                 label="Height"
-                                value={
-                                    order.height_cm
-                                        ? `${order.height_cm} cm`
-                                        : ''
-                                }
+                                value={withUnit(order.height_cm, 'cm')}
                             />
-                            <InfoItem label="BMI" value={bmi} />
+                            <InfoItem
+                                label="BMI"
+                                value={formatContentDisplay(bmi)}
+                            />
                             <InfoItem
                                 label="Diagnosis / Clinical Notes"
                                 value={order.diagnosis}
@@ -370,15 +411,12 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                             Target volume, duration, route, and calculated rate.
                         </CardDescription>
                     </CardHeader>
+
                     <CardContent>
                         <InfoGrid>
                             <InfoItem
                                 label="Total Fluid"
-                                value={
-                                    order.total_fluid_ml
-                                        ? `${order.total_fluid_ml} mL`
-                                        : ''
-                                }
+                                value={withUnit(order.total_fluid_ml, 'mL')}
                             />
                             <InfoItem
                                 label="Duration"
@@ -390,9 +428,7 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                             />
                             <InfoItem
                                 label="Rate"
-                                value={
-                                    infusionRate ? `${infusionRate} mL/hr` : ''
-                                }
+                                value={withUnit(infusionRate, 'mL/hr')}
                             />
                             <InfoItem label="Route" value={order.route} />
                         </InfoGrid>
@@ -406,8 +442,8 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                             Computation Summary
                         </CardTitle>
                         <CardDescription>
-                            Computed macronutrients, electrolytes, additives, calories, and
-                            osmolarity based on the saved order.
+                            Computed macronutrients, electrolytes, additives,
+                            calories, and osmolarity based on the saved order.
                         </CardDescription>
                     </CardHeader>
 
@@ -417,6 +453,7 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                 <h3 className="mb-3 text-sm font-semibold text-[#2f7d32]">
                                     Protein
                                 </h3>
+
                                 <InfoGrid>
                                     <InfoItem
                                         label="Dose"
@@ -428,23 +465,24 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                     />
                                     <InfoItem
                                         label="Contents"
-                                        value={
-                                            proteinGramsPerDay
-                                                ? `${proteinGramsPerDay} g/day`
-                                                : ''
-                                        }
+                                        value={withUnit(
+                                            proteinGramsPerDay,
+                                            'g/day',
+                                        )}
                                     />
                                     <InfoItem
                                         label="Volume"
-                                        value={proteinVolumeMl ? `${proteinVolumeMl} mL` : ''}
+                                        value={withUnit(
+                                            proteinVolumeMl,
+                                            'mL',
+                                        )}
                                     />
                                     <InfoItem
                                         label="Calories"
-                                        value={
-                                            proteinCalories
-                                                ? `${proteinCalories} Cal/day`
-                                                : ''
-                                        }
+                                        value={withUnit(
+                                            proteinCalories,
+                                            'Cal/day',
+                                        )}
                                     />
                                 </InfoGrid>
                             </div>
@@ -453,6 +491,7 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                 <h3 className="mb-3 text-sm font-semibold text-[#2f7d32]">
                                     Carbohydrates
                                 </h3>
+
                                 <InfoGrid>
                                     <InfoItem
                                         label="Dextrose"
@@ -464,29 +503,31 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                     />
                                     <InfoItem
                                         label="Contents"
-                                        value={
-                                            dextroseGramsPerDay
-                                                ? `${dextroseGramsPerDay} g/day`
-                                                : ''
-                                        }
+                                        value={withUnit(
+                                            dextroseGramsPerDay,
+                                            'g/day',
+                                        )}
                                     />
                                     <InfoItem
                                         label="Volume"
-                                        value={
-                                            dextroseVolumeMl ? `${dextroseVolumeMl} mL` : ''
-                                        }
+                                        value={withUnit(
+                                            dextroseVolumeMl,
+                                            'mL',
+                                        )}
                                     />
                                     <InfoItem
                                         label="GIR"
-                                        value={gir ? `${gir} mg/kg/min` : ''}
+                                        value={withUnit(
+                                            gir,
+                                            'mg/kg/min',
+                                        )}
                                     />
                                     <InfoItem
                                         label="Calories"
-                                        value={
-                                            dextroseCalories
-                                                ? `${dextroseCalories} Cal/day`
-                                                : ''
-                                        }
+                                        value={withUnit(
+                                            dextroseCalories,
+                                            'Cal/day',
+                                        )}
                                     />
                                 </InfoGrid>
                             </div>
@@ -495,6 +536,7 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                 <h3 className="mb-3 text-sm font-semibold text-[#2f7d32]">
                                     Fat
                                 </h3>
+
                                 <InfoGrid>
                                     <InfoItem
                                         label="Dose"
@@ -514,37 +556,35 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                     />
                                     <InfoItem
                                         label="Contents"
-                                        value={
-                                            lipidGramsPerDay
-                                                ? `${lipidGramsPerDay} g/day`
-                                                : ''
-                                        }
+                                        value={withUnit(
+                                            lipidGramsPerDay,
+                                            'g/day',
+                                        )}
                                     />
                                     <InfoItem
                                         label="Volume"
-                                        value={lipidVolumeMl ? `${lipidVolumeMl} mL` : ''}
+                                        value={withUnit(lipidVolumeMl, 'mL')}
                                     />
                                     <InfoItem
                                         label="Bottle Qty"
-                                        value={
-                                            lipidBottleVolumeMl
-                                                ? `${lipidBottleVolumeMl} mL`
-                                                : ''
-                                        }
+                                        value={withUnit(
+                                            lipidBottleVolumeMl,
+                                            'mL',
+                                        )}
                                     />
                                     <InfoItem
                                         label="Rate"
-                                        value={
-                                            lipidRateMlPerHour
-                                                ? `${lipidRateMlPerHour} mL/hr`
-                                                : ''
-                                        }
+                                        value={withUnit(
+                                            lipidRateMlPerHour,
+                                            'mL/hr',
+                                        )}
                                     />
                                     <InfoItem
                                         label="Calories"
-                                        value={
-                                            lipidCalories ? `${lipidCalories} Cal/day` : ''
-                                        }
+                                        value={withUnit(
+                                            lipidCalories,
+                                            'Cal/day',
+                                        )}
                                     />
                                 </InfoGrid>
                             </div>
@@ -560,7 +600,12 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                     label="Sodium"
                                     value={
                                         sodiumMeqPerDay || sodiumVolumeMl
-                                            ? `${sodiumMeqPerDay || '—'} meqs/day / ${sodiumVolumeMl || '—'
+                                            ? `${formatContentDisplay(
+                                                sodiumMeqPerDay,
+                                            ) || '—'
+                                            } meqs/day / ${formatContentDisplay(
+                                                sodiumVolumeMl,
+                                            ) || '—'
                                             } mL`
                                             : ''
                                     }
@@ -569,7 +614,12 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                     label="Potassium"
                                     value={
                                         potassiumMeqPerDay || potassiumVolumeMl
-                                            ? `${potassiumMeqPerDay || '—'} meqs/day / ${potassiumVolumeMl || '—'
+                                            ? `${formatContentDisplay(
+                                                potassiumMeqPerDay,
+                                            ) || '—'
+                                            } meqs/day / ${formatContentDisplay(
+                                                potassiumVolumeMl,
+                                            ) || '—'
                                             } mL`
                                             : ''
                                     }
@@ -578,7 +628,12 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                     label="Calcium"
                                     value={
                                         calciumMgPerDay || calciumVolumeMl
-                                            ? `${calciumMgPerDay || '—'} mg/day / ${calciumVolumeMl || '—'
+                                            ? `${formatContentDisplay(
+                                                calciumMgPerDay,
+                                            ) || '—'
+                                            } mg/day / ${formatContentDisplay(
+                                                calciumVolumeMl,
+                                            ) || '—'
                                             } mL`
                                             : ''
                                     }
@@ -587,7 +642,12 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                     label="Magnesium"
                                     value={
                                         magnesiumMeqPerDay || magnesiumVolumeMl
-                                            ? `${magnesiumMeqPerDay || '—'} meqs/day / ${magnesiumVolumeMl || '—'
+                                            ? `${formatContentDisplay(
+                                                magnesiumMeqPerDay,
+                                            ) || '—'
+                                            } meqs/day / ${formatContentDisplay(
+                                                magnesiumVolumeMl,
+                                            ) || '—'
                                             } mL`
                                             : ''
                                     }
@@ -595,8 +655,14 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                 <InfoItem
                                     label="Phosphorus"
                                     value={
-                                        phosphorusMmolPerDay || phosphorusVolumeMl
-                                            ? `${phosphorusMmolPerDay || '—'} mmol/day / ${phosphorusVolumeMl || '—'
+                                        phosphorusMmolPerDay ||
+                                            phosphorusVolumeMl
+                                            ? `${formatContentDisplay(
+                                                phosphorusMmolPerDay,
+                                            ) || '—'
+                                            } mmol/day / ${formatContentDisplay(
+                                                phosphorusVolumeMl,
+                                            ) || '—'
                                             } mL`
                                             : ''
                                     }
@@ -604,8 +670,12 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                 <InfoItem
                                     label="Trace Elements"
                                     value={
-                                        traceElementsMlPerDay || traceElementsVolumeMl
-                                            ? `${traceElementsMlPerDay || '—'} mL/day / ${traceElementsVolumeMl || '—'
+                                        traceElementsMlPerDay ||
+                                            traceElementsVolumeMl
+                                            ? `${traceElementsMlPerDay || '—'
+                                            } mL/day / ${formatContentDisplay(
+                                                traceElementsVolumeMl,
+                                            ) || '—'
                                             } mL`
                                             : ''
                                     }
@@ -613,8 +683,14 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                 <InfoItem
                                     label="Multivitamins"
                                     value={
-                                        order.multivitamins_ml_day || multivitaminsVolumeMl
-                                            ? `${order.multivitamins_ml_day || '—'} mL/day / ${multivitaminsVolumeMl || '—'
+                                        order.multivitamins_ml_day ||
+                                            multivitaminsVolumeMl
+                                            ? `${formatContentDisplay(
+                                                order.multivitamins_ml_day,
+                                            ) || '—'
+                                            } mL/day / ${formatContentDisplay(
+                                                multivitaminsVolumeMl,
+                                            ) || '—'
                                             } mL`
                                             : ''
                                     }
@@ -623,7 +699,12 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                     label="Heparin"
                                     value={
                                         order.heparin_ml || heparinTotalIu
-                                            ? `${order.heparin_ml || '—'} mL / ${heparinTotalIu || '—'
+                                            ? `${formatContentDisplay(
+                                                order.heparin_ml,
+                                            ) || '—'
+                                            } mL / ${formatContentDisplay(
+                                                heparinTotalIu,
+                                            ) || '—'
                                             } I.U.`
                                             : ''
                                     }
@@ -631,11 +712,15 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                 <InfoItem
                                     label="QS / Sterile Water"
                                     value={
-                                        order.sterile_water_level_ml_day
-                                            ? `${order.sterile_water_level_ml_day} mL`
-                                            : qsVolumeMl
-                                                ? `${qsVolumeMl} mL recommended`
-                                                : ''
+                                        sterileWaterDisplay
+                                            ? `${sterileWaterDisplay} mL${String(
+                                                order.sterile_water_level_ml_day ??
+                                                '',
+                                            ).trim() !== ''
+                                                ? ''
+                                                : ' recommended'
+                                            }`
+                                            : ''
                                     }
                                 />
                             </InfoGrid>
@@ -650,29 +735,31 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                 <InfoGrid>
                                     <InfoItem
                                         label="Protein Calories"
-                                        value={
-                                            proteinCalories ? `${proteinCalories} Cal/day` : ''
-                                        }
+                                        value={withUnit(
+                                            proteinCalories,
+                                            'Cal/day',
+                                        )}
                                     />
                                     <InfoItem
                                         label="Dextrose Calories"
-                                        value={
-                                            dextroseCalories
-                                                ? `${dextroseCalories} Cal/day`
-                                                : ''
-                                        }
+                                        value={withUnit(
+                                            dextroseCalories,
+                                            'Cal/day',
+                                        )}
                                     />
                                     <InfoItem
                                         label="Lipid Calories"
-                                        value={lipidCalories ? `${lipidCalories} Cal/day` : ''}
+                                        value={withUnit(
+                                            lipidCalories,
+                                            'Cal/day',
+                                        )}
                                     />
                                     <InfoItem
                                         label="Non-Protein Calories"
-                                        value={
-                                            totalNonProteinCaloriesPerKgDay
-                                                ? `${totalNonProteinCaloriesPerKgDay} Cal/kg/day`
-                                                : ''
-                                        }
+                                        value={withUnit(
+                                            totalNonProteinCaloriesPerKgDay,
+                                            'Cal/kg/day',
+                                        )}
                                     />
                                 </InfoGrid>
                             </div>
@@ -698,7 +785,10 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                         label="Calculator"
                                         value={osmolarityCalculatorType}
                                     />
-                                    <InfoItem label="Route" value={order.route} />
+                                    <InfoItem
+                                        label="Route"
+                                        value={order.route}
+                                    />
                                     <InfoItem
                                         label="Notes"
                                         value={order.osmolarity_notes}
@@ -707,8 +797,8 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
 
                                 {isPeripheralOsmolarityHigh ? (
                                     <div className="mt-3 rounded-lg border border-red-200 bg-white px-4 py-3 text-sm font-semibold text-red-700">
-                                        Peripheral line osmolarity is above the recommended
-                                        limit.
+                                        Peripheral line osmolarity is above the
+                                        recommended limit.
                                     </div>
                                 ) : null}
                             </div>
@@ -718,6 +808,7 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
             </div>
 
             <OrderExportSheet order={order} />
+
             <OrderRegistrationDialog
                 open={editDialogOpen}
                 onOpenChange={setEditDialogOpen}

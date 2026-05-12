@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 
 type FlashToast = {
+    id?: string;
     type: 'success' | 'error' | 'warning' | 'info';
     message: string;
 };
@@ -15,7 +16,7 @@ type SharedProps = {
 
 export function useFlashToast(): void {
     const { flash } = usePage<SharedProps>().props;
-    const lastMessage = useRef<string | null>(null);
+    const lastMessageId = useRef<string | null>(null);
 
     useEffect(() => {
         const data = flash?.toast;
@@ -24,13 +25,13 @@ export function useFlashToast(): void {
             return;
         }
 
-        const key = `${data.type}:${data.message}`;
+        const toastId = data.id || `${data.type}:${data.message}`;
 
-        if (lastMessage.current === key) {
+        if (lastMessageId.current === toastId) {
             return;
         }
 
-        lastMessage.current = key;
+        lastMessageId.current = toastId;
 
         toast[data.type](data.message);
     }, [flash?.toast]);

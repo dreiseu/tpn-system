@@ -37,6 +37,8 @@ class TpnOrderComputation extends Model
         'heparin_iu_per_ml',
         'sterile_water_level_ml_day',
 
+        'use_osmolarity_calculator',
+
         'osmolarity_notes',
         'osmolarity_inputs_json',
         'osmolarity_computed_mosm_l',
@@ -67,6 +69,7 @@ class TpnOrderComputation extends Model
         'heparin_ml' => 'decimal:2',
         'heparin_iu_per_ml' => 'decimal:2',
         'sterile_water_level_ml_day' => 'decimal:2',
+        'use_osmolarity_calculator' => 'boolean',
         'osmolarity_computed_mosm_l' => 'decimal:2',
 
         'date_created' => 'datetime',

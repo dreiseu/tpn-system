@@ -1,5 +1,5 @@
 import type { ImgHTMLAttributes } from 'react';
-import bghmcLogo from '@/../images/BGHMC_Logo_Compressed.png';
+import bghmcLogo from '@/../images/BGHMC logo hi-res.png';
 
 export default function AppLogoIcon(props: ImgHTMLAttributes<HTMLImageElement>) {
     return (

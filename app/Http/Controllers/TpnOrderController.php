@@ -92,6 +92,16 @@ class TpnOrderController extends Controller
     {
         $validated = $request->validated();
 
+        if ($this->shouldBlockPeripheralOsmolarity($validated)) {
+            return redirect()
+                ->back()
+                ->withInput()
+                ->with('toast', [
+                    'type' => 'error',
+                    'message' => 'Peripheral line osmolarity is above the safe limit. Please adjust the formulation before submitting.',
+                ]);
+        }
+
         $order = DB::transaction(function () use ($validated) {
             $now = Carbon::now();
             $userId = Auth::id();
@@ -133,6 +143,16 @@ class TpnOrderController extends Controller
     {
         $validated = $request->validated();
 
+        if ($this->shouldBlockPeripheralOsmolarity($validated)) {
+            return redirect()
+                ->back()
+                ->withInput()
+                ->with('toast', [
+                    'type' => 'error',
+                    'message' => 'Peripheral line osmolarity is above the safe limit. Please adjust the formulation before submitting.',
+                ]);
+        }
+
         DB::transaction(function () use ($validated, $order) {
             $now = Carbon::now();
             $userId = Auth::id();
@@ -169,6 +189,29 @@ class TpnOrderController extends Controller
                 'type' => 'success',
                 'message' => "TPN order {$orderNo} has been deleted.",
             ]);
+    }
+
+    private function shouldBlockPeripheralOsmolarity(array $validated): bool
+    {
+        $usesCalculator = (bool) ($validated['use_osmolarity_calculator'] ?? false);
+
+        if (!$usesCalculator) {
+            return false;
+        }
+
+        $route = $validated['route'] ?? null;
+
+        if ($route !== 'Peripheral Line') {
+            return false;
+        }
+
+        $osmolarity = $validated['osmolarity_computed_mosm_l'] ?? null;
+
+        if ($osmolarity === null || $osmolarity === '') {
+            return false;
+        }
+
+        return (float) $osmolarity >= 900;
     }
 
     private function generateOrderNumber(): string
@@ -252,9 +295,19 @@ class TpnOrderController extends Controller
             'heparin_iu_per_ml' => $validated['heparin_iu_per_ml'] ?? null,
             'sterile_water_level_ml_day' => $validated['sterile_water_level_ml_day'] ?? null,
 
-            'osmolarity_notes' => $validated['osmolarity_notes'] ?? null,
-            'osmolarity_inputs_json' => $validated['osmolarity_inputs_json'] ?? null,
-            'osmolarity_computed_mosm_l' => $validated['osmolarity_computed_mosm_l'] ?? null,
+            'use_osmolarity_calculator' => $validated['use_osmolarity_calculator'] ?? false,
+
+            'osmolarity_notes' => ($validated['use_osmolarity_calculator'] ?? false)
+                ? ($validated['osmolarity_notes'] ?? null)
+                : null,
+
+            'osmolarity_inputs_json' => ($validated['use_osmolarity_calculator'] ?? false)
+                ? ($validated['osmolarity_inputs_json'] ?? null)
+                : null,
+
+            'osmolarity_computed_mosm_l' => ($validated['use_osmolarity_calculator'] ?? false)
+                ? ($validated['osmolarity_computed_mosm_l'] ?? null)
+                : null,
 
             'date_modified' => $now,
         ];
@@ -326,6 +379,8 @@ class TpnOrderController extends Controller
             'heparin_ml' => $this->decimalToString($computation?->heparin_ml),
             'heparin_iu_per_ml' => $this->decimalToString($computation?->heparin_iu_per_ml),
             'sterile_water_level_ml_day' => $this->decimalToString($computation?->sterile_water_level_ml_day),
+
+            'use_osmolarity_calculator' => (bool) ($computation?->use_osmolarity_calculator ?? false),
 
             ...$osmolarityFields,
 

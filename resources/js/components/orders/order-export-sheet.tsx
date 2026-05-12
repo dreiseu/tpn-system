@@ -45,6 +45,26 @@ function value(value?: string | number | boolean | null) {
     return String(value);
 }
 
+function formatContentDisplay(value: string | number | null | undefined): string {
+    const numericValue = Number(value);
+
+    if (!Number.isFinite(numericValue) || numericValue <= 0) {
+        return '';
+    }
+
+    return numericValue.toFixed(1);
+}
+
+function formatQsCalculationValue(value: string | number | null | undefined): string {
+    const numericValue = Number(value);
+
+    if (!Number.isFinite(numericValue)) {
+        return '';
+    }
+
+    return numericValue.toFixed(1);
+}
+
 function splitOrderDateTime(orderDate?: string) {
     if (!orderDate) {
         return {
@@ -264,19 +284,28 @@ export function OrderExportSheet({
     const phosphorusVolumeMl =
         calculatePhosphorusVolumeMl(phosphorusMmolPerDay);
 
+    const traceElementsVolumeMl = order.trace_elements_ml_kg_day || '';
+    const multivitaminsVolumeMl = order.multivitamins_ml_day || '';
+    const heparinVolumeMl = (order as any).heparin_ml || '';
+
     const lipidVolumeForQs = order.lipid_piggyback ? lipidVolumeMl : '';
-    const qsVolumeMl = calculateQsVolumeMl(order.total_fluid_ml, [
-        proteinVolumeMl,
-        dextroseVolumeMl,
-        lipidVolumeForQs,
-        sodiumVolumeMl,
-        potassiumVolumeMl,
-        calciumVolumeMl,
-        magnesiumVolumeMl,
-        phosphorusVolumeMl,
-        order.trace_elements_ml_kg_day,
-        order.multivitamins_ml_day,
-    ]);
+
+    const qsVolumeMl = calculateQsVolumeMl(
+        formatQsCalculationValue(order.total_fluid_ml),
+        [
+            formatQsCalculationValue(proteinVolumeMl),
+            formatQsCalculationValue(dextroseVolumeMl),
+            formatQsCalculationValue(lipidVolumeForQs),
+            formatQsCalculationValue(sodiumVolumeMl),
+            formatQsCalculationValue(potassiumVolumeMl),
+            formatQsCalculationValue(calciumVolumeMl),
+            formatQsCalculationValue(magnesiumVolumeMl),
+            formatQsCalculationValue(phosphorusVolumeMl),
+            formatQsCalculationValue(traceElementsVolumeMl),
+            formatQsCalculationValue(multivitaminsVolumeMl),
+            formatQsCalculationValue(heparinVolumeMl),
+        ],
+    );
 
     const totalNonProteinCaloriesPerKgDay =
         calculateTotalNonProteinCaloriesPerKgDay(
@@ -286,9 +315,12 @@ export function OrderExportSheet({
         );
 
     const heparinMl = (order as any).heparin_ml || '';
-    const heparinIu = (order as any).heparin_iu_ml || '';
+    const heparinIuPerMl = (order as any).heparin_iu_per_ml || '';
     const heparinTotal =
-        heparinMl && heparinIu ? Number(heparinMl) * Number(heparinIu) : '';
+        heparinMl && heparinIuPerMl
+            ? Number(heparinMl) * Number(heparinIuPerMl)
+            : '';
+
     const orderDateTime = splitOrderDateTime(order.order_date);
 
     // Compute Osmolarity for the printout using the existing variables from above!
@@ -929,7 +961,7 @@ export function OrderExportSheet({
                                     <span style={{ fontSize: '14px' }}>X</span>{' '}
                                     <BlankLine
                                         width="35px"
-                                        text={weightForComputation}
+                                        text={formatContentDisplay(weightForComputation)}
                                     />{' '}
                                     kg
                                 </div>
@@ -943,7 +975,7 @@ export function OrderExportSheet({
                             >
                                 <BlankLine
                                     width="45px"
-                                    text={proteinGramsPerDay}
+                                    text={formatContentDisplay(proteinGramsPerDay)}
                                 />{' '}
                                 g/day
                             </td>
@@ -956,7 +988,7 @@ export function OrderExportSheet({
                             >
                                 <BlankLine
                                     width="45px"
-                                    text={proteinVolumeMl}
+                                    text={formatContentDisplay(proteinVolumeMl)}
                                 />{' '}
                                 mL
                             </td>
@@ -975,7 +1007,7 @@ export function OrderExportSheet({
                                 </div>
                                 <div style={{ paddingLeft: '16px' }}>
                                     Glucose Infusion Rate (GIR):{' '}
-                                    <BlankLine width="35px" text={gir} />{' '}
+                                    <BlankLine width="35px" text={formatContentDisplay(gir)} />{' '}
                                     mg/kg/min
                                 </div>
                                 <div
@@ -991,7 +1023,7 @@ export function OrderExportSheet({
                                     % /{' '}
                                     <BlankLine
                                         width="35px"
-                                        text={dextroseGramsPerDay}
+                                        text={formatContentDisplay(dextroseGramsPerDay)}
                                     />{' '}
                                     g/day
                                 </div>
@@ -1018,7 +1050,7 @@ export function OrderExportSheet({
                             >
                                 <BlankLine
                                     width="45px"
-                                    text={dextroseVolumeMl}
+                                    text={formatContentDisplay(dextroseVolumeMl)}
                                 />{' '}
                                 mL
                             </td>
@@ -1051,7 +1083,7 @@ export function OrderExportSheet({
                                     </span>{' '}
                                     <BlankLine
                                         width="35px"
-                                        text={weightForComputation}
+                                        text={formatContentDisplay(weightForComputation)}
                                     />{' '}
                                     kg{' '}
                                     <strong
@@ -1064,7 +1096,7 @@ export function OrderExportSheet({
                                     </strong>{' '}
                                     <BlankLine
                                         width="35px"
-                                        text={lipidGramsPerDay}
+                                        text={formatContentDisplay(lipidGramsPerDay)}
                                     />{' '}
                                     g/day
                                 </div>
@@ -1096,12 +1128,12 @@ export function OrderExportSheet({
                                     Infuse{' '}
                                     <BlankLine
                                         width="35px"
-                                        text={lipidVolumeMl}
+                                        text={formatContentDisplay(lipidVolumeMl)}
                                     />{' '}
                                     mL of emulsion at{' '}
                                     <BlankLine
                                         width="35px"
-                                        text={lipidRateMlPerHour}
+                                        text={formatContentDisplay(lipidRateMlPerHour)}
                                     />{' '}
                                     mL/hr over{' '}
                                     <BlankLine
@@ -1209,7 +1241,7 @@ export function OrderExportSheet({
                             },
                             {
                                 label: 'Calcium',
-                                formula: 'mg/kg/day',
+                                formula: 'mg/kg/day ',
                                 unit: 'mg/day',
                                 val: calciumMeqPerDay,
                                 req: order.calcium_mg_kg_day,
@@ -1275,7 +1307,7 @@ export function OrderExportSheet({
                                         </span>{' '}
                                         <BlankLine
                                             width="30px"
-                                            text={weightForComputation}
+                                            text={formatContentDisplay(weightForComputation)}
                                         />{' '}
                                         kg
                                     </td>
@@ -1285,7 +1317,7 @@ export function OrderExportSheet({
                                     >
                                         <BlankLine
                                             width="45px"
-                                            text={item.val}
+                                            text={formatContentDisplay(item.val)}
                                         />{' '}
                                         {item.unit}
                                     </td>
@@ -1295,7 +1327,7 @@ export function OrderExportSheet({
                                     >
                                         <BlankLine
                                             width="45px"
-                                            text={item.vol}
+                                            text={formatContentDisplay(item.vol)}
                                         />{' '}
                                         mL/day
                                     </td>
@@ -1328,16 +1360,12 @@ export function OrderExportSheet({
                                 </span>
                                 <BlankLine width="30px" text={order.trace_elements_ml_kg_day} /> mL/kg/day{' '}
                                 <span style={{ fontSize: '14px', margin: '0 4px' }}>X</span>{' '}
-                                <BlankLine width="30px" text={weightForComputation} /> kg
+                                <BlankLine width="30px" text={formatContentDisplay(weightForComputation)} /> kg
                             </td>
                             <td colSpan={2} style={{ borderTop: 'none', borderBottom: 'none', paddingTop: '2px', paddingBottom: '2px', textAlign: 'center' }}>
                                 <BlankLine
                                     width="45px"
-                                    text={
-                                        order.trace_elements_ml_kg_day
-                                            ? String(Number(order.trace_elements_ml_kg_day) * Number(weightForComputation || 0))
-                                            : ''
-                                    }
+                                    text={formatContentDisplay(traceElementsVolumeMl)}
                                 />{' '}
                                 mL
                             </td>
@@ -1352,7 +1380,7 @@ export function OrderExportSheet({
                                 <BlankLine width="30px" text={order.multivitamins_ml_day} /> mL/day
                             </td>
                             <td colSpan={2} style={{ borderTop: 'none', borderBottom: 'none', paddingTop: '2px', paddingBottom: '2px', textAlign: 'center' }}>
-                                <BlankLine width="45px" text={order.multivitamins_ml_day} /> mL
+                                <BlankLine width="45px" text={formatContentDisplay(multivitaminsVolumeMl)} /> mL
                             </td>
                         </tr>
 
@@ -1369,11 +1397,7 @@ export function OrderExportSheet({
                             <td colSpan={2} style={{ borderTop: 'none', borderBottom: '1px solid #000', paddingTop: '2px', paddingBottom: '8px', textAlign: 'center' }}>
                                 <BlankLine
                                     width="45px"
-                                    text={
-                                        order.heparin_ml && order.heparin_iu_per_ml
-                                            ? String(Number(order.heparin_ml) * Number(order.heparin_iu_per_ml))
-                                            : ''
-                                    }
+                                    text={formatContentDisplay(heparinTotal)}
                                 /> I.U.
                             </td>
                         </tr>
@@ -1393,7 +1417,7 @@ export function OrderExportSheet({
                                 Sterile Water / QS
                             </td>
                             <td colSpan={2} style={{ paddingTop: '8px', paddingBottom: '8px', textAlign: 'center' }}>
-                                <BlankLine width="45px" text={qsVolumeMl} /> mL
+                                <BlankLine width="45px" text={formatContentDisplay(qsVolumeMl)} /> mL
                             </td>
                         </tr>
                     </tbody>
@@ -1428,16 +1452,16 @@ export function OrderExportSheet({
                             }}
                         >
                             (Fat{' '}
-                            <BlankLine width="30px" text={lipidGramsPerDay} />{' '}
+                            <BlankLine width="30px" text={formatContentDisplay(lipidGramsPerDay)} />{' '}
                             g/day X 9) + (Dextrose{' '}
                             <BlankLine
                                 width="35px"
-                                text={dextroseGramsPerDay}
+                                text={formatContentDisplay(dextroseGramsPerDay)}
                             />{' '}
                             g/day X 3.4 /
                             <BlankLine
                                 width="30px"
-                                text={weightForComputation}
+                                text={formatContentDisplay(weightForComputation)}
                             />{' '}
                             kg) =
                         </span>
@@ -1449,7 +1473,7 @@ export function OrderExportSheet({
                                 textAlign: 'center',
                             }}
                         >
-                            {totalNonProteinCaloriesPerKgDay || '\u00a0'}
+                            {formatContentDisplay(totalNonProteinCaloriesPerKgDay) || '\u00a0'}
                         </strong>{' '}
                         Cal/kg/day
                     </div>

@@ -1,6 +1,15 @@
 import { Head } from '@inertiajs/react';
-import { Printer } from 'lucide-react';
+import { CalendarIcon, Printer } from 'lucide-react';
+import { Calendar } from '@/components/ui/calendar';
+import {
+    Dialog,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import bghmcLogoUrl from '../../../images/BGHMC logo hi-res.png';
 import dohLogoUrl from '../../../images/DOH Logo.png';
@@ -22,9 +31,14 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import {
+    calculateCalciumContentPerDay,
+    calculateCalciumVolumeMl,
     calculateDextroseVolumeMl,
+    calculateMagnesiumVolumeMl,
     calculatePerKgPerDay,
+    calculatePotassiumVolumeMl,
     calculateProteinVolumeMl,
+    calculateSodiumVolumeMl,
     getPatientName,
     resolveWeightForComputation,
     type TpnOrder,
@@ -48,12 +62,19 @@ type TpnLabelData = {
     dextrosePercent: string;
     dextroseVolume: string;
     sodiumDose: string;
+    sodiumVolume: string;
     potassiumDose: string;
+    potassiumVolume: string;
     magnesiumDose: string;
+    magnesiumVolume: string;
     calciumDose: string;
+    calciumVolume: string;
     traceElementDose: string;
+    traceElementVolume: string;
     multivitaminsDose: string;
+    multivitaminsVolume: string;
     heparinDose: string;
+    heparinVolume: string;
     sterileWaterVolume: string;
     totalVolume: string;
     rate: string;
@@ -66,14 +87,110 @@ type TpnLabelData = {
 };
 
 function today() {
-    return new Date().toLocaleDateString('en-US');
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 }
 
 function tomorrow() {
     const date = new Date();
     date.setDate(date.getDate() + 1);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
 
-    return date.toLocaleDateString('en-US');
+function formatDateForPrint(dateStr: string) {
+    if (!dateStr) return '';
+    const [year, month, day] = dateStr.split('-');
+    if (!year || !month || !day) return dateStr;
+    return `${month}/${day}/${year}`;
+}
+
+function getOrderDateString(orderDate?: string) {
+    if (!orderDate) return today();
+
+    const d = new Date(orderDate);
+    // Fallback to today if the database string is invalid
+    if (isNaN(d.getTime())) return today();
+
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
+}
+
+function labelValue(value: unknown, fallback = '-') {
+    if (value === null || value === undefined) {
+        return fallback;
+    }
+
+    const text = String(value).trim();
+
+    if (text === '' || text === '0.00') {
+        return fallback;
+    }
+
+    return text;
+}
+
+function formatLabelContentDisplay(value: unknown, fallback = '-') {
+    const text = labelValue(value, fallback);
+
+    if (text === fallback) {
+        return fallback;
+    }
+
+    const numericValue = Number(text);
+
+    if (!Number.isFinite(numericValue) || numericValue <= 0) {
+        return fallback;
+    }
+
+    return numericValue.toFixed(1);
+}
+
+function formatSterileWaterDisplay(value: unknown, fallback = '-') {
+    if (value === null || value === undefined) {
+        return fallback;
+    }
+
+    const numericValue = Number(value);
+
+    if (!Number.isFinite(numericValue)) {
+        return fallback;
+    }
+
+    return numericValue.toFixed(1);
+}
+
+function getSterileWaterFromOsmolarityInputs(order?: TpnOrder | null): string {
+    const rawJson = order?.osmolarity_inputs_json;
+
+    if (!rawJson) {
+        return '';
+    }
+
+    try {
+        const parsed =
+            typeof rawJson === 'string'
+                ? JSON.parse(rawJson)
+                : rawJson;
+
+        const sterileWaterValue =
+            parsed?.tpn?.sterile_water_ml ??
+            parsed?.ppn?.sterile_water_ml ??
+            parsed?.additives?.sterile_water_ml ??
+            '';
+
+        return String(sterileWaterValue ?? '').trim();
+    } catch {
+        return '';
+    }
 }
 
 function tpnLabelFromOrder(order?: TpnOrder | null): TpnLabelData {
@@ -86,39 +203,88 @@ function tpnLabelFromOrder(order?: TpnOrder | null): TpnLabelData {
         weight,
     );
 
+    const sodiumDosePerDay = calculatePerKgPerDay(order?.sodium_meq_kg_day ?? '', weight);
+    const potassiumDosePerDay = calculatePerKgPerDay(order?.potassium_meq_kg_day ?? '', weight);
+    const magnesiumDosePerDay = calculatePerKgPerDay(order?.magnesium_meq_kg_day ?? '', weight);
+    const calciumDosePerDay = calculateCalciumContentPerDay(order?.calcium_mg_kg_day ?? '', weight);
+    const traceElementDosePerDay = order?.trace_elements_ml_kg_day || '';
+    const multivitaminsDosePerDay = order?.multivitamins_ml_day || '';
+    const heparinMl = Number(order?.heparin_ml);
+    const heparinIuPerMl = Number(order?.heparin_iu_per_ml);
+
+    const heparinDose =
+        Number.isFinite(heparinMl) &&
+            Number.isFinite(heparinIuPerMl) &&
+            heparinMl > 0 &&
+            heparinIuPerMl > 0
+            ? String(heparinMl * heparinIuPerMl)
+            : '';
+
+    const sterileWaterFromJson = getSterileWaterFromOsmolarityInputs(order);
+
+    const sterileWaterVolume =
+        String(order?.sterile_water_level_ml_day ?? '').trim() !== ''
+            ? order?.sterile_water_level_ml_day
+            : sterileWaterFromJson;
+
     return {
         alertLevel: 'high',
         patientName: order ? getPatientName(order) || '-' : '-',
-        hospitalNumber: order?.hospital_number || '',
-        ward: [order?.ward, order?.room].filter(Boolean).join(' / '),
-        date: today(),
-        btlNumber: '',
-        aminoAcidDose: aminoAcidGrams || '-',
-        aminoAcidVolume: calculateProteinVolumeMl(aminoAcidGrams) || '-',
-        dextrosePercent: order?.dextrose_percent || '-',
-        dextroseVolume:
+        hospitalNumber: labelValue(order?.hospital_number),
+        ward: labelValue([order?.ward, order?.room].filter(Boolean).join(' / ')),
+        date: order?.order_date ? getOrderDateString(order.order_date) : today(),
+        btlNumber: '-',
+        aminoAcidDose: formatLabelContentDisplay(aminoAcidGrams),
+        aminoAcidVolume: formatLabelContentDisplay(
+            calculateProteinVolumeMl(aminoAcidGrams),
+        ),
+
+        dextrosePercent: formatLabelContentDisplay(order?.dextrose_percent),
+        dextroseVolume: formatLabelContentDisplay(
             calculateDextroseVolumeMl(
                 order?.total_fluid_ml ?? '',
                 order?.dextrose_percent ?? '',
-            ) || '-',
-        sodiumDose: order?.sodium_meq_kg_day || '-',
-        potassiumDose: order?.potassium_meq_kg_day || '-',
-        magnesiumDose: order?.magnesium_meq_kg_day || '-',
-        calciumDose: order?.calcium_mg_kg_day || '-',
-        traceElementDose: order?.trace_elements_ml_kg_day || '-',
-        multivitaminsDose: order?.multivitamins_ml_day || '-',
-        heparinDose:
-            order?.heparin_ml || order?.heparin_iu_per_ml
-                ? `${order.heparin_ml || '-'} mL x ${order.heparin_iu_per_ml || '-'} IU/mL`
-                : '-',
-        sterileWaterVolume: order?.sterile_water_level_ml_day || '-',
-        totalVolume: order?.total_fluid_ml || '-',
+            ),
+        ),
+
+        sodiumDose: formatLabelContentDisplay(sodiumDosePerDay),
+        sodiumVolume: formatLabelContentDisplay(
+            calculateSodiumVolumeMl(sodiumDosePerDay),
+        ),
+
+        potassiumDose: formatLabelContentDisplay(potassiumDosePerDay),
+        potassiumVolume: formatLabelContentDisplay(
+            calculatePotassiumVolumeMl(potassiumDosePerDay),
+        ),
+
+        magnesiumDose: formatLabelContentDisplay(magnesiumDosePerDay),
+        magnesiumVolume: formatLabelContentDisplay(
+            calculateMagnesiumVolumeMl(magnesiumDosePerDay),
+        ),
+
+        calciumDose: formatLabelContentDisplay(calciumDosePerDay),
+        calciumVolume: formatLabelContentDisplay(
+            calculateCalciumVolumeMl(calciumDosePerDay),
+        ),
+
+        traceElementDose: labelValue(traceElementDosePerDay),
+        traceElementVolume: labelValue(traceElementDosePerDay),
+
+        multivitaminsDose: formatLabelContentDisplay(multivitaminsDosePerDay),
+        multivitaminsVolume: formatLabelContentDisplay(multivitaminsDosePerDay),
+
+        heparinDose: formatLabelContentDisplay(heparinDose),
+        heparinVolume: formatLabelContentDisplay(order?.heparin_ml),
+
+        sterileWaterVolume: formatSterileWaterDisplay(sterileWaterVolume),
+        totalVolume: formatLabelContentDisplay(order?.total_fluid_ml),
+
         rate:
             order?.total_fluid_ml && order?.duration_hours
-                ? (
+                ? formatLabelContentDisplay(
                     Number(order.total_fluid_ml) /
-                    Number(order.duration_hours)
-                ).toFixed(1)
+                    Number(order.duration_hours),
+                )
                 : '-',
         duration: order?.duration_hours || '24',
         expiresOn: tomorrow(),
@@ -134,16 +300,119 @@ function tpnLabelFromOrder(order?: TpnOrder | null): TpnLabelData {
 function EditableField({
     label,
     value,
+    type = 'text',
     onChange,
 }: {
     label: string;
     value: string;
+    type?: string;
     onChange: (value: string) => void;
 }) {
+    const [dialogOpen, setDialogOpen] = useState(false);
+    const [draftDate, setDraftDate] = useState<Date | undefined>();
+
+    if (type === 'date') {
+        const selectedDate = value ? new Date(value + 'T00:00:00') : undefined;
+
+        let displayValue = 'Select date';
+        if (selectedDate && !isNaN(selectedDate.getTime())) {
+            displayValue = selectedDate.toLocaleDateString('en-PH', {
+                year: 'numeric',
+                month: 'long',
+                day: '2-digit',
+            });
+        }
+
+        return (
+            <div className="grid gap-2">
+                <Label>{label}</Label>
+                <div className="flex items-center gap-2">
+                    <Input
+                        value={displayValue}
+                        readOnly
+                        className="cursor-pointer"
+                        onClick={() => {
+                            setDraftDate(selectedDate);
+                            setDialogOpen(true);
+                        }}
+                    />
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="shrink-0 cursor-pointer"
+                        onClick={() => {
+                            setDraftDate(selectedDate);
+                            setDialogOpen(true);
+                        }}
+                    >
+                        <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+                </div>
+
+                <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                    <DialogContent className="w-auto max-w-none p-0">
+                        <DialogHeader className="border-b px-5 py-4">
+                            <DialogTitle>Select {label}</DialogTitle>
+                        </DialogHeader>
+                        <div className="px-4 py-4">
+                            <Calendar
+                                mode="single"
+                                selected={draftDate}
+                                onSelect={setDraftDate}
+                                captionLayout="dropdown"
+                                hideNavigation
+                                startMonth={new Date(2020, 0)}
+                                endMonth={new Date(new Date().getFullYear() + 5, 11)}
+                            />
+                        </div>
+                        <DialogFooter className="border-t px-5 py-4">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="cursor-pointer"
+                                onClick={() => {
+                                    onChange('');
+                                    setDialogOpen(false);
+                                }}
+                            >
+                                Clear
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="cursor-pointer"
+                                onClick={() => setDialogOpen(false)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="button"
+                                className="cursor-pointer"
+                                onClick={() => {
+                                    if (draftDate) {
+                                        const year = draftDate.getFullYear();
+                                        const month = String(draftDate.getMonth() + 1).padStart(2, '0');
+                                        const day = String(draftDate.getDate()).padStart(2, '0');
+                                        onChange(`${year}-${month}-${day}`);
+                                    }
+                                    setDialogOpen(false);
+                                }}
+                            >
+                                Apply
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            </div>
+        );
+    }
+
     return (
         <div className="grid gap-2">
             <Label>{label}</Label>
             <Input
+                type="text"
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
             />
@@ -164,6 +433,9 @@ export default function TpnLabelsPage({ orders = [] }: LabelPageProps) {
     const [labelData, setLabelData] = useState<TpnLabelData>(() =>
         tpnLabelFromOrder(orders[0]),
     );
+
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
 
     const [printCopies, setPrintCopies] = useState(1);
     const previewCopies = Math.min(printCopies, 4);
@@ -208,15 +480,22 @@ export default function TpnLabelsPage({ orders = [] }: LabelPageProps) {
 
             <style>{`
                 @page {
-                    size: 8.5in 14in portrait;
+                    size: letter portrait;
                     margin: 0;
                 }
 
                 .label-preview-area {
                     display: flex;
                     flex-wrap: wrap;
-                    gap: 8px;
+                    /* 0px is the vertical gap (top to bottom), 8px is the horizontal gap (side to side) */
+                    gap: 8px 8px; 
                     align-items: flex-start;
+                    align-content: flex-start;
+                }
+
+                /* This guarantees the preview boxes themselves don't push each other away */
+                .label-preview-area > div {
+                    margin-bottom: 0px !important;
                 }
 
                 .label-print-area {
@@ -245,10 +524,10 @@ export default function TpnLabelsPage({ orders = [] }: LabelPageProps) {
                 }
 
                 .tpn-label-sheet .label-header {
-                    display: grid;
-                    grid-template-columns: 34px 1fr 34px;
+                    display: flex;
+                    justify-content: center;
                     align-items: center;
-                    gap: 2px;
+                    gap: 16px;
                     height: 42px;
                     border-bottom: 1px solid #000000;
                     padding-bottom: 1px;
@@ -465,51 +744,41 @@ export default function TpnLabelsPage({ orders = [] }: LabelPageProps) {
                     body {
                         margin: 0 !important;
                         padding: 0 !important;
+                        width: 816px !important;
                         background: #ffffff !important;
+                        height: auto !important; 
+                        overflow: visible !important;
                     }
 
-                    body * {
-                        visibility: hidden !important;
-                    }
-
-                    .label-preview-area,
-                    .label-preview-area * {
-                        visibility: hidden !important;
+                    body > * {
                         display: none !important;
                     }
 
-                    .label-print-area,
-                    .label-print-area * {
-                        visibility: visible !important;
+                    body > .label-print-area {
+                        display: block !important;
+                        width: 816px !important;
+                        margin-top: 40px !important;
+                        padding: 0 !important;
+                        background: #ffffff !important;
                     }
 
-                    .label-print-area {
-                        position: fixed !important;
-                        left: 0 !important;
-                        top: 0 !important;
-                        width: 100% !important;
-                        background: #ffffff !important;
-                        padding: 0 !important;
-                        margin: 0 !important;
-                        display: block !important;
+                    .label-preview-area {
+                        display: none !important;
                     }
 
                     .print-page {
-                        width: 100% !important;
+                        visibility: visible !important;
+                        width: 816px !important;
+                        height: 1056px !important;
                         box-sizing: border-box !important;
-
-                        padding-top: 24px !important;
-                        padding-left: 24px !important;
-                        padding-right: 0 !important;
-                        padding-bottom: 0 !important;
+                        overflow: hidden !important;
 
                         display: grid !important;
-                        grid-template-columns: 380px 380px !important;
-                        grid-auto-rows: 372px !important;
-                        column-gap: 6px !important;
-                        row-gap: 6px !important;
-                        justify-content: start !important;
-                        align-items: start !important;
+                        grid-template-columns: repeat(2, 357px) !important;
+                        gap: 0px 0px !important;
+                        align-content: start !important;
+                        justify-content: center !important;
+                        padding-top: 2px !important;
 
                         page-break-after: always !important;
                         break-after: page !important;
@@ -521,9 +790,10 @@ export default function TpnLabelsPage({ orders = [] }: LabelPageProps) {
                     }
 
                     .label-copy {
-                        width: 380px !important;
-                        height: 372px !important;
+                        width: 357px !important;
+                        height: 350px !important;
                         box-sizing: border-box !important;
+                        overflow: hidden !important;
                         page-break-inside: avoid !important;
                         break-inside: avoid !important;
                     }
@@ -531,6 +801,8 @@ export default function TpnLabelsPage({ orders = [] }: LabelPageProps) {
                     .tpn-label-sheet {
                         width: 380px !important;
                         height: 372px !important;
+                        transform: scale(0.94) !important;
+                        transform-origin: top left !important;
                         box-sizing: border-box !important;
                         overflow: hidden !important;
                     }
@@ -567,7 +839,7 @@ export default function TpnLabelsPage({ orders = [] }: LabelPageProps) {
                                 max={20}
                                 value={printCopies}
                                 onChange={(event) => updatePrintCopies(event.target.value)}
-                                className="h-9 w-24"
+                                className="h-9 w-24 text-center"
                             />
                         </div>
 
@@ -603,6 +875,7 @@ export default function TpnLabelsPage({ orders = [] }: LabelPageProps) {
                                     <SelectContent>
                                         {orders.map((order) => (
                                             <SelectItem
+                                                className="cursor-pointer"
                                                 key={order.id}
                                                 value={String(order.id)}
                                             >
@@ -625,17 +898,17 @@ export default function TpnLabelsPage({ orders = [] }: LabelPageProps) {
                                         )
                                     }
                                 >
-                                    <SelectTrigger className="w-full">
+                                    <SelectTrigger className="w-full cursor-pointer">
                                         <SelectValue placeholder="Select alert level" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="low">
+                                        <SelectItem value="low" className="cursor-pointer">
                                             Low Alert
                                         </SelectItem>
-                                        <SelectItem value="medium">
+                                        <SelectItem value="medium" className="cursor-pointer">
                                             Medium Alert
                                         </SelectItem>
-                                        <SelectItem value="high">
+                                        <SelectItem value="high" className="cursor-pointer">
                                             High Alert
                                         </SelectItem>
                                     </SelectContent>
@@ -645,19 +918,20 @@ export default function TpnLabelsPage({ orders = [] }: LabelPageProps) {
                             <div className="grid grid-cols-1 gap-4">
                                 {(
                                     [
-                                        ['patientName', 'Name'],
-                                        ['hospitalNumber', 'Hospital No.'],
-                                        ['ward', 'Ward'],
-                                        ['date', 'Date'],
-                                        ['btlNumber', 'BTL #'],
-                                        ['expiresOn', 'Expires On'],
-                                        ['preparedBy', 'Prepared By'],
-                                        ['cautionText', 'Caution'],
-                                    ] as Array<[keyof TpnLabelData, string]>
-                                ).map(([field, label]) => (
+                                        ['patientName', 'Name', 'text'],
+                                        ['hospitalNumber', 'Hospital No.', 'text'],
+                                        ['ward', 'Ward', 'text'],
+                                        ['date', 'Date', 'date'], // <--- Changed to 'date'
+                                        ['btlNumber', 'BTL #', 'text'],
+                                        ['expiresOn', 'Expires On', 'date'], // <--- Changed to 'date'
+                                        ['preparedBy', 'Prepared By', 'text'],
+                                        ['cautionText', 'Caution', 'text'],
+                                    ] as Array<[keyof TpnLabelData, string, string]>
+                                ).map(([field, label, inputType]) => (
                                     <EditableField
                                         key={field}
                                         label={label}
+                                        type={inputType} // <--- Pass the type here
                                         value={labelData[field]}
                                         onChange={(value) =>
                                             updateField(field, value)
@@ -676,17 +950,22 @@ export default function TpnLabelsPage({ orders = [] }: LabelPageProps) {
                         ))}
                     </div>
 
-                    <div className="label-print-area">
-                        {printPages.map((pageLabels, pageIndex) => (
-                            <div className="print-page" key={`print-page-${pageIndex}`}>
-                                {pageLabels.map((labelNumber) => (
-                                    <div className="label-copy" key={`print-${labelNumber}`}>
-                                        <TpnPrintableLabel data={labelData} />
+                    {mounted && typeof document !== 'undefined'
+                        ? createPortal(
+                            <div className="label-print-area">
+                                {printPages.map((pageLabels, pageIndex) => (
+                                    <div className="print-page" key={`print-page-${pageIndex}`}>
+                                        {pageLabels.map((labelNumber) => (
+                                            <div className="label-copy" key={`print-${labelNumber}`}>
+                                                <TpnPrintableLabel data={labelData} />
+                                            </div>
+                                        ))}
                                     </div>
                                 ))}
-                            </div>
-                        ))}
-                    </div>
+                            </div>,
+                            document.body,
+                        )
+                        : null}
                 </div>
             </div>
         </>
@@ -714,26 +993,26 @@ function TpnPrintableLabel({ data }: { data: TpnLabelData }) {
     const rows = [
         ['Amino Acid', data.aminoAcidDose, 'g', data.aminoAcidVolume, 'mL'],
         ['Dextrose', data.dextrosePercent, '%', data.dextroseVolume, 'mL'],
-        ['Sodium', data.sodiumDose, 'meq/day', '-', 'mL'],
-        ['Potassium', data.potassiumDose, 'meq/day', '-', 'mL'],
-        ['Mag Sulfate', data.magnesiumDose, 'meq/day', '-', 'mL'],
-        ['Ca Gluconate', data.calciumDose, 'meq/day', '-', 'mL'],
-        ['Trace Element', data.traceElementDose, 'mL', '', 'mL'],
-        ['MVS', data.multivitaminsDose, 'mL', '', 'mL'],
-        ['Heparin', data.heparinDose, 'units', '', 'mL'],
-        ['qs ad water', data.sterileWaterVolume, 'mL', '', 'mL'],
+        ['Sodium', data.sodiumDose, 'meq/day', data.sodiumVolume, 'mL'],
+        ['Potassium', data.potassiumDose, 'meq/day', data.potassiumVolume, 'mL'],
+        ['Mag Sulfate', data.magnesiumDose, 'meq/day', data.magnesiumVolume, 'mL'],
+        ['Ca Gluconate', data.calciumDose, 'meq/day', data.calciumVolume, 'mL'],
+        ['Trace Element', data.traceElementDose, 'mL', data.traceElementVolume, 'mL'],
+        ['MVS', data.multivitaminsDose, 'mL', data.multivitaminsVolume, 'mL'],
+        ['Heparin', data.heparinDose, 'units', data.heparinVolume, 'mL'],
+        ['qs ad water', '', 'mL', data.sterileWaterVolume, 'mL'],
     ];
 
     return (
         <div className="tpn-label-sheet">
             <div className="label-header">
-                <img src={dohLogoUrl} alt="" className="label-logo" />
+                <img src={bghmcLogoUrl} alt="" className="label-logo" />
                 <div className="label-header-text">
                     BATAAN GENERAL HOSPITAL AND MEDICAL CENTER
                     <br /><br />
                     PHARMACY DEPARTMENT
                 </div>
-                <img src={bghmcLogoUrl} alt="" className="label-logo" />
+                <img src={dohLogoUrl} alt="" className="label-logo" />
             </div>
 
             <div className="label-title-band">
@@ -749,7 +1028,7 @@ function TpnPrintableLabel({ data }: { data: TpnLabelData }) {
                 <div className="label-cell">NAME:</div>
                 <div className="value-line">{data.patientName}</div>
                 <div className="label-cell">DATE:</div>
-                <div className="value-line">{data.date}</div>
+                <div className="value-line">{formatDateForPrint(data.date)}</div>
             </div>
 
             <div className="patient-row hospital-ward-btl-row">
@@ -795,7 +1074,7 @@ function TpnPrintableLabel({ data }: { data: TpnLabelData }) {
 
             <div className="footer-row">
                 <div className="footer-label">EXPIRES ON</div>
-                <div className="value-line">{data.expiresOn}</div>
+                <div className="value-line">{formatDateForPrint(data.expiresOn)}</div>
 
                 <div className="lipid-label">{data.lipidText}</div>
                 <div className="value-line"></div>

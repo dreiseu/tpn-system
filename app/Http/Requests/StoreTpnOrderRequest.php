@@ -21,6 +21,8 @@ class StoreTpnOrderRequest extends FormRequest
             'lipid_piggyback' => $this->boolean('lipid_piggyback'),
             'lipid_separate_line' => $this->boolean('lipid_separate_line'),
 
+            'use_osmolarity_calculator' => $this->boolean('use_osmolarity_calculator'),
+
             'last_name' => $this->nullIfEmpty($this->input('last_name')),
             'first_name' => $this->nullIfEmpty($this->input('first_name')),
             'middle_name' => $this->nullIfEmpty($this->input('middle_name')),
@@ -98,7 +100,7 @@ class StoreTpnOrderRequest extends FormRequest
 
             'total_fluid_ml' => ['required', 'numeric', 'min:0.01'],
             'duration_hours' => ['required', 'numeric', 'min:0.01'],
-            'route' => ['nullable', 'string', 'max:100'],
+            'route' => ['required', 'string', 'max:100'],
 
             'protein_g_per_kg_day' => ['nullable', 'numeric', 'min:0'],
             'dextrose_percent' => ['nullable', 'numeric', 'min:0'],
@@ -123,8 +125,9 @@ class StoreTpnOrderRequest extends FormRequest
             'multivitamins_ml_day' => ['nullable', 'numeric', 'min:0'],
             'heparin_ml' => ['nullable', 'numeric', 'min:0'],
             'heparin_iu_per_ml' => ['nullable', 'numeric', 'min:0'],
-            'sterile_water_level_ml_day' => ['nullable', 'numeric', 'min:0'],
+            'sterile_water_level_ml_day' => ['nullable', 'numeric'],
 
+            'use_osmolarity_calculator' => ['boolean'],
             'osmolarity_notes' => ['nullable', 'string'],
             'osmolarity_inputs_json' => ['nullable', 'string'],
             'osmolarity_computed_mosm_l' => ['nullable', 'numeric', 'min:0'],
@@ -142,6 +145,7 @@ class StoreTpnOrderRequest extends FormRequest
             'total_fluid_ml.min' => 'Total fluid must be greater than zero.',
             'duration_hours.required' => 'Duration is required.',
             'duration_hours.min' => 'Duration must be greater than zero.',
+            'route.required' => 'Infusion route is required.',
         ];
     }
 

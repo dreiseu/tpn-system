@@ -60,6 +60,8 @@ export type TpnOrderFormData = {
     heparin_iu_per_ml: string;
     sterile_water_level_ml_day: string;
 
+    use_osmolarity_calculator: boolean;
+
     osmolarity_ppn_solution: string;
     osmolarity_ppn_volume_ml: string;
     osmolarity_ppn_lock_total_volume: string;
@@ -147,6 +149,8 @@ export const initialOrderFormData: TpnOrderFormData = {
     heparin_ml: '',
     heparin_iu_per_ml: '',
     sterile_water_level_ml_day: '',
+
+    use_osmolarity_calculator: false,
 
     osmolarity_ppn_solution: '',
     osmolarity_ppn_volume_ml: '',
@@ -251,6 +255,7 @@ export const osmolarityLockTotalVolumeOptions: OsmolarityOption[] = [
 ];
 
 export const osmolarityDextroseConcentrationOptions: OsmolarityOption[] = [
+    { label: 'Dextrose 10%', value: '6' }, 
     { label: 'Dextrose 10%', value: '10' },
     { label: 'Dextrose 20%', value: '20' },
     { label: 'Dextrose 30%', value: '30' },
@@ -512,7 +517,7 @@ export function formatComputedNumber(
 }
 
 export function formatVolumeNumber(value: number | null): string {
-    return formatComputedNumber(value, 2);
+    return formatComputedNumber(value, 1);
 }
 
 export function calculatePerKgPerDay(dose: string, weightKg: string): string {
