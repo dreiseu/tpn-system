@@ -1,12 +1,19 @@
 <?php
 
 use App\Http\Controllers\TpnOrderController;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 
-Route::inertia('/', 'welcome', [
-    'canRegister' => Features::enabled(Features::registration()),
-])->name('home');
+// Ends the session when the browser tab is closed (called via sendBeacon)
+Route::post('/session-end', function () {
+    Auth::logout();
+    request()->session()->invalidate();
+    request()->session()->regenerateToken();
+    return response()->noContent();
+})->middleware('web')->name('session.end');
+
+Route::redirect('/', '/login')->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [TpnOrderController::class, 'dashboard'])
@@ -38,6 +45,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('labels/lipids', [TpnOrderController::class, 'lipidsLabel'])
         ->name('labels.lipids');
+
+    // Profile Settings
+    Route::get('settings/profile', [\App\Http\Controllers\Settings\ProfileController::class, 'edit'])
+        ->name('profile.edit');
+    Route::patch('settings/profile', [\App\Http\Controllers\Settings\ProfileController::class, 'update'])
+        ->name('profile.update');
+    Route::delete('settings/profile', [\App\Http\Controllers\Settings\ProfileController::class, 'destroy'])
+        ->name('profile.destroy');
 });
 
-require __DIR__ . '/settings.php';

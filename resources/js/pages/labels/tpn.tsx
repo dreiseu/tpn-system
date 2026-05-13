@@ -437,16 +437,20 @@ export default function TpnLabelsPage({ orders = [] }: LabelPageProps) {
     const [mounted, setMounted] = useState(false);
     useEffect(() => setMounted(true), []);
 
+    const isBatchMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('ids');
+    const batchLabels = useMemo(() => orders.map(tpnLabelFromOrder), [orders]);
+
     const [printCopies, setPrintCopies] = useState(1);
     const previewCopies = Math.min(printCopies, 4);
 
     const labelsPerPrintPage = 6;
+    const totalLabelsToPrint = isBatchMode ? orders.length * printCopies : printCopies;
 
     const printPages = Array.from(
-        { length: Math.ceil(printCopies / labelsPerPrintPage) },
+        { length: Math.ceil(totalLabelsToPrint / labelsPerPrintPage) },
         (_, pageIndex) => {
             const start = pageIndex * labelsPerPrintPage;
-            const count = Math.min(labelsPerPrintPage, printCopies - start);
+            const count = Math.min(labelsPerPrintPage, totalLabelsToPrint - start);
 
             return Array.from({ length: count }, (_, labelIndex) => start + labelIndex);
         },
@@ -485,17 +489,19 @@ export default function TpnLabelsPage({ orders = [] }: LabelPageProps) {
                 }
 
                 .label-preview-area {
-                    display: flex;
-                    flex-wrap: wrap;
-                    /* 0px is the vertical gap (top to bottom), 8px is the horizontal gap (side to side) */
-                    gap: 8px 8px; 
-                    align-items: flex-start;
-                    align-content: flex-start;
+                    /* Custom Tailwind classes will handle the layout */
                 }
 
-                /* This guarantees the preview boxes themselves don't push each other away */
-                .label-preview-area > div {
-                    margin-bottom: 0px !important;
+                .label-preview-area .label-copy {
+                    width: 357px !important;
+                    height: 350px !important;
+                    box-sizing: border-box !important;
+                    overflow: hidden !important;
+                }
+                
+                .label-preview-area .tpn-label-sheet {
+                    transform: scale(0.94) !important;
+                    transform-origin: top left !important;
                 }
 
                 .label-print-area {
@@ -853,99 +859,119 @@ export default function TpnLabelsPage({ orders = [] }: LabelPageProps) {
                     </div>
                 </div>
 
-                <div className="grid gap-6 xl:grid-cols-[400px_1fr]">
-                    <Card className="rounded-lg border-slate-200 bg-white shadow-sm print:hidden">
-                        <CardHeader>
-                            <CardTitle>Label Setup</CardTitle>
-                            <CardDescription>
-                                Changes here are for printing only and do not
-                                alter the saved order.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-5">
-                            <div className="grid gap-2">
-                                <Label>Order</Label>
-                                <Select
-                                    value={selectedOrderId}
-                                    onValueChange={setSelectedOrderId}
-                                >
-                                    <SelectTrigger className="w-full">
-                                        <SelectValue placeholder="Select order" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {orders.map((order) => (
-                                            <SelectItem
-                                                className="cursor-pointer"
-                                                key={order.id}
-                                                value={String(order.id)}
-                                            >
-                                                {order.order_no} -{' '}
-                                                {getPatientName(order) || 'N/A'}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                <div className={isBatchMode ? "grid gap-6" : "grid gap-6 xl:grid-cols-[400px_1fr]"}>
+                    {!isBatchMode && (
+                        <Card className="rounded-lg border-slate-200 bg-white shadow-sm print:hidden">
+                            <CardHeader>
+                                <CardTitle>Label Setup</CardTitle>
+                                <CardDescription>
+                                    Changes here are for printing only and do not
+                                    alter the saved order.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-5">
+                                <div className="grid gap-2">
+                                    <Label>Order</Label>
+                                    <Select
+                                        value={selectedOrderId}
+                                        onValueChange={setSelectedOrderId}
+                                    >
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="Select order" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {orders.map((order) => (
+                                                <SelectItem
+                                                    className="cursor-pointer"
+                                                    key={order.id}
+                                                    value={String(order.id)}
+                                                >
+                                                    {order.order_no} -{' '}
+                                                    {getPatientName(order) || 'N/A'}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
 
-                            <div className="grid gap-2">
-                                <Label>Alert Level</Label>
-                                <Select
-                                    value={labelData.alertLevel}
-                                    onValueChange={(value) =>
-                                        updateField(
-                                            'alertLevel',
-                                            value as AlertLevel,
-                                        )
-                                    }
-                                >
-                                    <SelectTrigger className="w-full cursor-pointer">
-                                        <SelectValue placeholder="Select alert level" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="low" className="cursor-pointer">
-                                            Low Alert
-                                        </SelectItem>
-                                        <SelectItem value="medium" className="cursor-pointer">
-                                            Medium Alert
-                                        </SelectItem>
-                                        <SelectItem value="high" className="cursor-pointer">
-                                            High Alert
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="grid grid-cols-1 gap-4">
-                                {(
-                                    [
-                                        ['patientName', 'Name', 'text'],
-                                        ['hospitalNumber', 'Hospital No.', 'text'],
-                                        ['ward', 'Ward', 'text'],
-                                        ['date', 'Date', 'date'], // <--- Changed to 'date'
-                                        ['btlNumber', 'BTL #', 'text'],
-                                        ['expiresOn', 'Expires On', 'date'], // <--- Changed to 'date'
-                                        ['preparedBy', 'Prepared By', 'text'],
-                                        ['cautionText', 'Caution', 'text'],
-                                    ] as Array<[keyof TpnLabelData, string, string]>
-                                ).map(([field, label, inputType]) => (
-                                    <EditableField
-                                        key={field}
-                                        label={label}
-                                        type={inputType} // <--- Pass the type here
-                                        value={labelData[field]}
-                                        onChange={(value) =>
-                                            updateField(field, value)
+                                <div className="grid gap-2">
+                                    <Label>Alert Level</Label>
+                                    <Select
+                                        value={labelData.alertLevel}
+                                        onValueChange={(value) =>
+                                            updateField(
+                                                'alertLevel',
+                                                value as AlertLevel,
+                                            )
                                         }
-                                    />
-                                ))}
-                            </div>
-                        </CardContent>
-                    </Card>
+                                    >
+                                        <SelectTrigger className="w-full cursor-pointer">
+                                            <SelectValue placeholder="Select alert level" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="low" className="cursor-pointer">
+                                                Low Alert
+                                            </SelectItem>
+                                            <SelectItem value="medium" className="cursor-pointer">
+                                                Medium Alert
+                                            </SelectItem>
+                                            <SelectItem value="high" className="cursor-pointer">
+                                                High Alert
+                                            </SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
 
-                    <div className="label-preview-area">
-                        {Array.from({ length: previewCopies }).map((_, index) => (
-                            <div className="label-copy" key={`preview-${index}`}>
-                                <TpnPrintableLabel data={labelData} />
+                                <div className="grid grid-cols-1 gap-4">
+                                    {(
+                                        [
+                                            ['patientName', 'Name', 'text'],
+                                            ['hospitalNumber', 'Hospital No.', 'text'],
+                                            ['ward', 'Ward', 'text'],
+                                            ['date', 'Date', 'date'], // <--- Changed to 'date'
+                                            ['btlNumber', 'BTL #', 'text'],
+                                            ['expiresOn', 'Expires On', 'date'], // <--- Changed to 'date'
+                                            ['preparedBy', 'Prepared By', 'text'],
+                                            ['cautionText', 'Caution', 'text'],
+                                        ] as Array<[keyof TpnLabelData, string, string]>
+                                    ).map(([field, label, inputType]) => (
+                                        <EditableField
+                                            key={field}
+                                            label={label}
+                                            type={inputType} // <--- Pass the type here
+                                            value={labelData[field]}
+                                            onChange={(value) =>
+                                                updateField(field, value)
+                                            }
+                                        />
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    <div className="label-preview-area flex flex-col items-center gap-8 rounded-lg bg-slate-100 py-8 overflow-y-auto border border-slate-200" style={{ maxHeight: '800px' }}>
+                        {printPages.map((page, pageIndex) => (
+                            <div
+                                key={`preview-page-${pageIndex}`}
+                                className="bg-white shadow-sm ring-1 ring-slate-200 flex-shrink-0"
+                                style={{
+                                    width: '816px',
+                                    height: '1248px',
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(2, 357px)',
+                                    alignContent: 'start',
+                                    justifyContent: 'center',
+                                    paddingTop: '60px',
+                                }}
+                            >
+                                {page.map((labelIndex) => (
+                                    <div className="label-copy" key={`preview-${labelIndex}`}>
+                                        <TpnPrintableLabel
+                                            data={isBatchMode ? batchLabels[Math.floor(labelIndex / printCopies)] : labelData}
+                                        />
+                                    </div>
+                                ))}
                             </div>
                         ))}
                     </div>
@@ -953,11 +979,13 @@ export default function TpnLabelsPage({ orders = [] }: LabelPageProps) {
                     {mounted && typeof document !== 'undefined'
                         ? createPortal(
                             <div className="label-print-area">
-                                {printPages.map((pageLabels, pageIndex) => (
-                                    <div className="print-page" key={`print-page-${pageIndex}`}>
-                                        {pageLabels.map((labelNumber) => (
-                                            <div className="label-copy" key={`print-${labelNumber}`}>
-                                                <TpnPrintableLabel data={labelData} />
+                                {printPages.map((page, pageIndex) => (
+                                    <div className="print-page" key={`page-${pageIndex}`}>
+                                        {page.map((labelIndex) => (
+                                            <div className="label-copy" key={`print-${labelIndex}`}>
+                                                <TpnPrintableLabel
+                                                    data={isBatchMode ? batchLabels[Math.floor(labelIndex / printCopies)] : labelData}
+                                                />
                                             </div>
                                         ))}
                                     </div>

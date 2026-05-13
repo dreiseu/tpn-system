@@ -114,6 +114,21 @@ return [
             'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE') ?: null,
         ],
 
+        'hris' => [
+            'driver' => 'sqlsrv',
+            'url' => env('HRIS_URL'),
+            'host' => env('HRIS_HOST', '192.168.42.10'),
+            'port' => env('HRIS_PORT', '1435'),
+            'database' => env('HRIS_DB', 'BGH_HRMv2'),
+            'username' => env('HRIS_USERNAME', 'sa'),
+            'password' => env('HRIS_PASSWORD', 'Pr0f1l3R'),
+            'charset' => env('HRIS_CHARSET', 'utf8'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'encrypt' => env('HRIS_ENCRYPT') ?: null,
+            'trust_server_certificate' => env('HRIS_TRUST_SERVER_CERTIFICATE', true) ?: null,
+        ],
+
     ],
 
     /*

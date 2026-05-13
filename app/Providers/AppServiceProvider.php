@@ -24,6 +24,10 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+
+        \Illuminate\Support\Facades\Auth::provider('soap', function ($app, array $config) {
+            return new \App\Auth\SoapUserProvider();
+        });
     }
 
     /**

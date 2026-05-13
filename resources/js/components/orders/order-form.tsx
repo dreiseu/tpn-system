@@ -1022,7 +1022,7 @@ function PatientInformationSection({
 
     return (
         <Card className="rounded-lg border-border/80 shadow-sm">
-            <CardHeader className="pb-4">
+            <CardHeader>
                 <CardTitle>Patient Information</CardTitle>
                 <CardDescription>
                     Encode the patient identity and current hospital location
@@ -1378,7 +1378,7 @@ function ClinicalDetailsSection({
 }: ClinicalDetailsSectionProps) {
     return (
         <Card className="rounded-lg border-border/80 shadow-sm">
-            <CardHeader className="pb-4">
+            <CardHeader>
                 <CardTitle>Clinical Details</CardTitle>
                 <CardDescription>
                     Enter the clinical basis and anthropometric data for the TPN
@@ -1516,7 +1516,7 @@ function TpnRequirementsSection({
 }: TpnRequirementsSectionProps) {
     return (
         <Card className="rounded-lg border-border/80 shadow-sm">
-            <CardHeader className="pb-4">
+            <CardHeader>
                 <CardTitle>TPN Requirements</CardTitle>
                 <CardDescription>
                     Define the target volume, infusion duration, route, and
@@ -1663,7 +1663,7 @@ function ComputationSection({
     return (
         <div className="space-y-4">
             <Card className="rounded-lg border-border/80 shadow-sm">
-                <CardHeader className="pb-3">
+                <CardHeader>
                     <CardTitle>Macronutrients</CardTitle>
                     <CardDescription>
                         Encode protein, carbohydrate, and fat targets. The
@@ -1716,14 +1716,14 @@ function ComputationSection({
 
                             <div className="mt-4 grid gap-2">
                                 <ComputationLine
-                                    label="Total Fluid"
-                                    value={data.total_fluid_ml}
-                                    unit="mL"
-                                />
-                                <ComputationLine
                                     label="IV Rate"
                                     value={computedRateMlPerHour}
                                     unit="mL/hr"
+                                />
+                                <ComputationLine
+                                    label="GIR"
+                                    value={gir}
+                                    unit="mg/kg/min"
                                 />
                                 <ComputationLine
                                     label="Contents"
@@ -1734,11 +1734,6 @@ function ComputationSection({
                                     label="Volume"
                                     value={dextroseVolumeMl}
                                     unit="mL"
-                                />
-                                <ComputationLine
-                                    label="GIR"
-                                    value={gir}
-                                    unit="mg/kg/min"
                                 />
                             </div>
                         </MacronutrientCard>
@@ -2134,7 +2129,7 @@ function ComputationSection({
                                     updateField('osmolarity_notes', '');
                                 }
                             }}
-                            className="mt-1 shrink-0"
+                            className="mt-1 shrink-0 cursor-pointer"
                         />
 
                         <span className="grid gap-1">
@@ -2421,7 +2416,7 @@ function ReviewSection({
 
     return (
         <Card className="rounded-lg border-border/80 shadow-sm">
-            <CardHeader className="pb-4">
+            <CardHeader>
                 <CardTitle>Review</CardTitle>
                 <CardDescription>
                     Confirm the request details before sending the TPN order for

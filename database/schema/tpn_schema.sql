@@ -37,8 +37,8 @@ BEGIN
         route NVARCHAR(200) NULL,
         
         -- Audit Trail
-        created_by BIGINT NULL,
-        modified_by BIGINT NULL,
+        created_by VARCHAR(50) NULL,
+        modified_by VARCHAR(50) NULL,
         date_created DATETIME2(7) NULL DEFAULT GETDATE(),
         date_modified DATETIME2(7) NULL DEFAULT GETDATE()
     );
@@ -83,6 +83,8 @@ BEGIN
         osmolarity_notes NVARCHAR(MAX) NULL,
         
         -- Audit Trail
+        created_by VARCHAR(50) NULL,
+        modified_by VARCHAR(50) NULL,
         date_created DATETIME2(7) NULL DEFAULT GETDATE(),
         date_modified DATETIME2(7) NULL DEFAULT GETDATE(),
         
@@ -105,7 +107,7 @@ BEGIN
         remarks NVARCHAR(MAX) NULL,
         
         -- Audit Trail
-        changed_by BIGINT NULL,
+        changed_by VARCHAR(50) NULL,
         changed_at DATETIME2(7) NULL DEFAULT GETDATE(),
         
         -- Constraints
@@ -116,17 +118,42 @@ BEGIN
 END
 GO
 
--- ==============================================================================
--- End of Script
--- ==============================================================================
-
 -- 4. Create TPN Order Sequence Table
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'tblTpnOrderSequence')
 BEGIN
     CREATE TABLE tblTpnOrderSequence (
         seq_year INT NULL,
-        last_number INT NULL
+        last_number INT NULL,
+        created_by VARCHAR(50) NULL,
+        modified_by VARCHAR(50) NULL,
+        created_at DATETIME2(7) NULL DEFAULT GETDATE(),
+        updated_at DATETIME2(7) NULL DEFAULT GETDATE()
     );
 END
 GO
 
+-- 5. Create User Authority Table for Authentication
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'UserAuthority')
+BEGIN
+    CREATE TABLE UserAuthority (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        FullName NVARCHAR(255) NULL,
+        BiometricID VARCHAR(50) NOT NULL UNIQUE,
+        UserPrivilege INT DEFAULT 0,
+        Section NVARCHAR(100) NULL,
+        Division NVARCHAR(100) NULL,
+        Position NVARCHAR(100) NULL,
+        SectionName NVARCHAR(255) NULL,
+        PositionName NVARCHAR(255) NULL,
+        LastLogin DATETIME NULL,
+        created_by VARCHAR(50) NULL,
+        modified_by VARCHAR(50) NULL,
+        created_at DATETIME2(7) NULL DEFAULT GETDATE(),
+        updated_at DATETIME2(7) NULL DEFAULT GETDATE()
+    );
+END
+GO
+
+-- ==============================================================================
+-- End of Script
+-- ==============================================================================

@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { OrderExportSheet } from '@/components/orders/order-export-sheet';
 import ConfirmationDialog from '@/components/ui/confirmation-dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -74,6 +75,7 @@ export default function OrdersIndex({
     const [editingOrder, setEditingOrder] = useState<TpnOrder | null>(null);
     const [deletingOrder, setDeletingOrder] = useState<TpnOrder | null>(null);
     const [exportingOrder, setExportingOrder] = useState<TpnOrder | null>(null);
+    const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(new Set());
 
     const [currentPage, setCurrentPage] = useState(1);
 
@@ -92,7 +94,7 @@ export default function OrdersIndex({
             const matchesStatus =
                 status === 'All' ||
                 String(order.status ?? '').toLowerCase() ===
-                    String(status).toLowerCase();
+                String(status).toLowerCase();
 
             return matchesQuery && matchesStatus;
         });
@@ -115,6 +117,34 @@ export default function OrdersIndex({
     useEffect(() => {
         setCurrentPage(1);
     }, [query, status]);
+
+    function toggleOrderSelection(orderId: number) {
+        setSelectedOrderIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(orderId)) {
+                next.delete(orderId);
+            } else {
+                next.add(orderId);
+            }
+            return next;
+        });
+    }
+
+    function toggleAllOnPage() {
+        if (paginatedOrders.length === 0) return;
+        const allPageIds = paginatedOrders.map(o => o.id);
+        const allSelected = allPageIds.every(id => selectedOrderIds.has(id));
+
+        setSelectedOrderIds(prev => {
+            const next = new Set(prev);
+            if (allSelected) {
+                allPageIds.forEach(id => next.delete(id));
+            } else {
+                allPageIds.forEach(id => next.add(id));
+            }
+            return next;
+        });
+    }
 
     function handleCreate() {
         setEditingOrder(null);
@@ -166,13 +196,35 @@ export default function OrdersIndex({
                         </p>
                     </div>
 
-                    <Button
-                        className="cursor-pointer bg-[#2f7d32] text-white hover:bg-[#27692a]"
-                        onClick={handleCreate}
-                    >
-                        <Plus className="mr-2 h-4 w-4" />
-                        New TPN Order
-                    </Button>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        {selectedOrderIds.size > 0 && (
+                            <div className="flex items-center gap-2 mr-2">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => window.open(`/labels/tpn?ids=${Array.from(selectedOrderIds).join(',')}`, '_blank')}
+                                    className="cursor-pointer"
+                                >
+                                    <ClipboardList className="mr-2 h-4 w-4 text-[#2f7d32]" />
+                                    Print TPN ({selectedOrderIds.size})
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => window.open(`/labels/lipids?ids=${Array.from(selectedOrderIds).join(',')}`, '_blank')}
+                                    className="cursor-pointer"
+                                >
+                                    <ClipboardList className="mr-2 h-4 w-4 text-orange-600" />
+                                    Print Lipids ({selectedOrderIds.size})
+                                </Button>
+                            </div>
+                        )}
+                        <Button
+                            className="cursor-pointer bg-[#2f7d32] text-white hover:bg-[#27692a]"
+                            onClick={handleCreate}
+                        >
+                            <Plus className="mr-2 h-4 w-4" />
+                            New TPN Order
+                        </Button>
+                    </div>
                 </div>
 
                 <Card className="rounded-lg border-slate-200 bg-white shadow-sm">
@@ -202,7 +254,7 @@ export default function OrdersIndex({
                                     />
                                 </div>
 
-                                <Select
+                                {/* <Select
                                     value={status}
                                     onValueChange={(value) =>
                                         setStatus(
@@ -227,7 +279,7 @@ export default function OrdersIndex({
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
-                                </Select>
+                                </Select> */}
                             </div>
                         </div>
                     </CardHeader>
@@ -237,16 +289,23 @@ export default function OrdersIndex({
                             <table className="w-full min-w-[1040px] text-sm">
                                 <thead className="border-b border-slate-200 text-left text-xs tracking-[0.16em] text-slate-600 uppercase">
                                     <tr>
+                                        <th className="w-[40px] px-4 py-3">
+                                            <Checkbox
+                                                checked={paginatedOrders.length > 0 && paginatedOrders.every(o => selectedOrderIds.has(o.id))}
+                                                onCheckedChange={toggleAllOnPage}
+                                                aria-label="Select all on page"
+                                            />
+                                        </th>
                                         <th className="py-3 pr-5 font-semibold">
                                             Order No.
                                         </th>
                                         <th className="px-5 py-3 font-semibold">
                                             Patient
                                         </th>
-                                        <th className="px-5 py-3 font-semibold">
+                                        <th className="px-5 py-3 text-center font-semibold">
                                             Hospital No.
                                         </th>
-                                        <th className="px-5 py-3 font-semibold">
+                                        <th className="px-5 py-3 text-center font-semibold">
                                             Date of Birth
                                         </th>
                                         <th className="px-5 py-3 text-center font-semibold">
@@ -272,6 +331,13 @@ export default function OrdersIndex({
                                             key={order.id}
                                             className="transition hover:bg-slate-50"
                                         >
+                                            <td className="px-4 py-4">
+                                                <Checkbox
+                                                    checked={selectedOrderIds.has(order.id)}
+                                                    onCheckedChange={() => toggleOrderSelection(order.id)}
+                                                    aria-label={`Select order ${order.order_no}`}
+                                                />
+                                            </td>
                                             <td className="py-4 pr-5 font-medium text-slate-900">
                                                 <Link
                                                     href={`/orders/${order.id}`}
@@ -289,10 +355,10 @@ export default function OrdersIndex({
                                                         'N/A'}
                                                 </Link>
                                             </td>
-                                            <td className="px-5 py-4 font-medium text-slate-900">
+                                            <td className="px-5 py-4 text-center font-medium text-slate-900">
                                                 {order.hospital_number || 'N/A'}
                                             </td>
-                                            <td className="px-5 py-4 text-slate-700">
+                                            <td className="px-5 py-4 text-center text-slate-700">
                                                 {order.date_of_birth || 'N/A'}
                                             </td>
                                             <td className="px-5 py-4 text-center text-slate-700">
@@ -300,7 +366,7 @@ export default function OrdersIndex({
                                             </td>
                                             <td className="px-5 py-4 text-center text-slate-700">
                                                 {order.current_weight_kg ||
-                                                order.birth_weight_kg
+                                                    order.birth_weight_kg
                                                     ? `${order.current_weight_kg || order.birth_weight_kg} kg`
                                                     : 'N/A'}
                                             </td>
@@ -394,7 +460,7 @@ export default function OrdersIndex({
                                     {filteredOrders.length === 0 ? (
                                         <tr>
                                             <td
-                                                colSpan={8}
+                                                colSpan={9}
                                                 className="h-[544px] text-center text-sm text-slate-500"
                                             >
                                                 No orders match your search or
@@ -405,21 +471,21 @@ export default function OrdersIndex({
 
                                     {filteredOrders.length > 0
                                         ? Array.from({ length: emptyRows }).map(
-                                              (_, index) => (
-                                                  <tr
-                                                      key={`empty-row-${index}`}
-                                                      className="h-[68px]"
-                                                      aria-hidden="true"
-                                                  >
-                                                      <td
-                                                          colSpan={8}
-                                                          className="border-b border-slate-100"
-                                                      >
-                                                          &nbsp;
-                                                      </td>
-                                                  </tr>
-                                              ),
-                                          )
+                                            (_, index) => (
+                                                <tr
+                                                    key={`empty-row-${index}`}
+                                                    className="h-[68px]"
+                                                    aria-hidden="true"
+                                                >
+                                                    <td
+                                                        colSpan={9}
+                                                        className="border-b border-slate-100"
+                                                    >
+                                                        &nbsp;
+                                                    </td>
+                                                </tr>
+                                            ),
+                                        )
                                         : null}
                                 </tbody>
                             </table>
@@ -539,7 +605,7 @@ export default function OrdersIndex({
                                                 }}
                                                 className={
                                                     safeCurrentPage ===
-                                                    totalPages
+                                                        totalPages
                                                         ? 'pointer-events-none opacity-50'
                                                         : ''
                                                 }

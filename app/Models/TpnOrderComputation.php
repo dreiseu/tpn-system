@@ -45,6 +45,8 @@ class TpnOrderComputation extends Model
 
         'date_created',
         'date_modified',
+        'created_by',
+        'modified_by',
     ];
 
     protected $casts = [

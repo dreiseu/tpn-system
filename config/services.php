@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'soap' => [
+        'address' => env('SOAP_ADDRESS'),
+        'app_code' => env('SOAP_APP_CODE'),
+        'debug_mode' => env('SOAP_DEBUG_MODE', false),
+    ],
+
 ];

@@ -1,12 +1,17 @@
 export type User = {
-    id: number;
+    id: string;
+    bioid: string;
     name: string;
     email: string;
-    avatar?: string;
+    FullName: string;
+    Section: string;
+    Division: string;
+    Position: string;
+    SectionName: string;
+    PositionName: string;
+    UserPrivilege: number;
     email_verified_at: string | null;
-    two_factor_enabled?: boolean;
-    created_at: string;
-    updated_at: string;
+    avatar?: string;
     [key: string]: unknown;
 };
 

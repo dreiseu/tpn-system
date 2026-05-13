@@ -10,6 +10,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -74,17 +75,17 @@ class TpnOrderController extends Controller
         ]);
     }
 
-    public function tpnLabel(): Response
+    public function tpnLabel(Request $request): Response
     {
         return Inertia::render('labels/tpn', [
-            'orders' => $this->labelOrders(),
+            'orders' => $this->labelOrders($request->query('ids')),
         ]);
     }
 
-    public function lipidsLabel(): Response
+    public function lipidsLabel(Request $request): Response
     {
         return Inertia::render('labels/lipids', [
-            'orders' => $this->labelOrders(),
+            'orders' => $this->labelOrders($request->query('ids')),
         ]);
     }
 
@@ -116,7 +117,7 @@ class TpnOrderController extends Controller
 
             TpnOrderComputation::create([
                 'tpn_order_id' => $order->tpn_order_id,
-                ...$this->computationAttributes($validated, $now, true),
+                ...$this->computationAttributes($validated, $userId, $now, true),
             ]);
 
             TpnOrderStatusHistory::create([
@@ -125,6 +126,8 @@ class TpnOrderController extends Controller
                 'new_status' => 'Pending Review',
                 'remarks' => 'TPN order submitted for review.',
                 'changed_by' => $userId,
+                'created_by' => $userId,
+                'modified_by' => $userId,
                 'changed_at' => $now,
             ]);
 
@@ -161,7 +164,7 @@ class TpnOrderController extends Controller
 
             TpnOrderComputation::updateOrCreate(
                 ['tpn_order_id' => $order->tpn_order_id],
-                $this->computationAttributes($validated, $now, !$order->computation()->exists()),
+                $this->computationAttributes($validated, $userId, $now, !$order->computation()->exists()),
             );
         });
 
@@ -221,16 +224,25 @@ class TpnOrderController extends Controller
         return $result[0]->order_no;
     }
 
-    private function labelOrders()
+    private function labelOrders(?string $ids = null)
     {
-        return TpnOrder::query()
+        $query = TpnOrder::query()
             ->with('computation')
-            ->orderByDesc('tpn_order_id')
-            ->get()
+            ->orderByDesc('tpn_order_id');
+
+        if ($ids) {
+            $idArray = explode(',', $ids);
+            $idArray = array_filter(array_map('intval', $idArray));
+            if (!empty($idArray)) {
+                $query->whereIn('tpn_order_id', $idArray);
+            }
+        }
+
+        return $query->get()
             ->map(fn(TpnOrder $order) => $this->formatOrderForFrontend($order));
     }
 
-    private function orderAttributes(array $validated, ?int $userId, Carbon $now, bool $creating = false): array
+    private function orderAttributes(array $validated, ?string $bioId, Carbon $now, bool $creating = false): array
     {
         $attributes = [
             'temporary_request' => $validated['temporary_request'] ?? false,
@@ -258,19 +270,19 @@ class TpnOrderController extends Controller
             'duration_hours' => $validated['duration_hours'] ?? null,
             'route' => $validated['route'] ?? null,
 
-            'modified_by' => $userId,
+            'modified_by' => $bioId,
             'date_modified' => $now,
         ];
 
         if ($creating) {
-            $attributes['created_by'] = $userId;
+            $attributes['created_by'] = $bioId;
             $attributes['date_created'] = $now;
         }
 
         return $attributes;
     }
 
-    private function computationAttributes(array $validated, Carbon $now, bool $creating = false): array
+    private function computationAttributes(array $validated, ?string $bioId, Carbon $now, bool $creating = false): array
     {
         $attributes = [
             'protein_g_per_kg_day' => $validated['protein_g_per_kg_day'] ?? null,
@@ -309,10 +321,12 @@ class TpnOrderController extends Controller
                 ? ($validated['osmolarity_computed_mosm_l'] ?? null)
                 : null,
 
+            'modified_by' => $bioId,
             'date_modified' => $now,
         ];
 
         if ($creating) {
+            $attributes['created_by'] = $bioId;
             $attributes['date_created'] = $now;
         }
 
