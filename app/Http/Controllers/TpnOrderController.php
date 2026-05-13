@@ -23,7 +23,7 @@ class TpnOrderController extends Controller
         $recentOrders = TpnOrder::query()
             ->with('computation')
             ->orderByDesc('tpn_order_id')
-            ->limit(8)
+            ->limit(50)
             ->get()
             ->map(fn(TpnOrder $order) => $this->formatOrderForFrontend($order));
 
@@ -176,6 +176,50 @@ class TpnOrderController extends Controller
             ]);
     }
 
+    public function updateStatus(Request $request, TpnOrder $order): RedirectResponse
+    {
+        $validated = $request->validate([
+            'status' => 'required|string|in:Draft,Pending Review,Approved,For Compounding,For Dispensing,Completed,Cancelled',
+            'remarks' => 'nullable|string',
+        ]);
+
+        $oldStatus = $order->status;
+        $newStatus = $validated['status'];
+
+        if ($oldStatus === $newStatus) {
+            return redirect()->back();
+        }
+
+        DB::transaction(function () use ($order, $oldStatus, $newStatus, $validated) {
+            $userId = Auth::id();
+            $now = Carbon::now();
+
+            $order->update([
+                'status' => $newStatus,
+                'modified_by' => $userId,
+                'date_modified' => $now,
+            ]);
+
+            TpnOrderStatusHistory::create([
+                'tpn_order_id' => $order->tpn_order_id,
+                'old_status' => $oldStatus,
+                'new_status' => $newStatus,
+                'remarks' => $validated['remarks'] ?? "Status changed from {$oldStatus} to {$newStatus}.",
+                'changed_by' => $userId,
+                'created_by' => $userId,
+                'modified_by' => $userId,
+                'changed_at' => $now,
+            ]);
+        });
+
+        return redirect()
+            ->back()
+            ->with('toast', [
+                'type' => 'success',
+                'message' => "Order {$order->order_no} status updated to {$newStatus}.",
+            ]);
+    }
+
     public function destroy(TpnOrder $order): RedirectResponse
     {
         $orderNo = $order->order_no;
@@ -263,10 +307,11 @@ class TpnOrderController extends Controller
 
             'birth_weight_kg' => $validated['birth_weight_kg'] ?? null,
             'current_weight_kg' => $validated['current_weight_kg'] ?? null,
-            'height_cm' => $validated['height_cm'] ?? null,
             'diagnosis' => $validated['diagnosis'] ?? null,
 
+            'total_fluid_req_ml_kg_day' => $validated['total_fluid_req_ml_kg_day'] ?? null,
             'total_fluid_ml' => $validated['total_fluid_ml'] ?? null,
+            'total_fluid_with_overfill_ml' => $validated['total_fluid_with_overfill_ml'] ?? null,
             'duration_hours' => $validated['duration_hours'] ?? null,
             'route' => $validated['route'] ?? null,
 
@@ -305,7 +350,6 @@ class TpnOrderController extends Controller
             'multivitamins_ml_day' => $validated['multivitamins_ml_day'] ?? null,
             'heparin_ml' => $validated['heparin_ml'] ?? null,
             'heparin_iu_per_ml' => $validated['heparin_iu_per_ml'] ?? null,
-            'sterile_water_level_ml_day' => $validated['sterile_water_level_ml_day'] ?? null,
 
             'use_osmolarity_calculator' => $validated['use_osmolarity_calculator'] ?? false,
 
@@ -365,10 +409,11 @@ class TpnOrderController extends Controller
 
             'birth_weight_kg' => $this->decimalToString($order->birth_weight_kg),
             'current_weight_kg' => $this->decimalToString($order->current_weight_kg),
-            'height_cm' => $this->decimalToString($order->height_cm),
             'diagnosis' => $order->diagnosis ?? '',
 
+            'total_fluid_req_ml_kg_day' => $this->decimalToString($order->total_fluid_req_ml_kg_day),
             'total_fluid_ml' => $this->decimalToString($order->total_fluid_ml),
+            'total_fluid_with_overfill_ml' => $this->decimalToString($order->total_fluid_with_overfill_ml),
             'duration_hours' => $this->decimalToString($order->duration_hours),
             'route' => $order->route ?? '',
 
@@ -392,7 +437,6 @@ class TpnOrderController extends Controller
             'multivitamins_ml_day' => $this->decimalToString($computation?->multivitamins_ml_day),
             'heparin_ml' => $this->decimalToString($computation?->heparin_ml),
             'heparin_iu_per_ml' => $this->decimalToString($computation?->heparin_iu_per_ml),
-            'sterile_water_level_ml_day' => $this->decimalToString($computation?->sterile_water_level_ml_day),
 
             'use_osmolarity_calculator' => (bool) ($computation?->use_osmolarity_calculator ?? false),
 

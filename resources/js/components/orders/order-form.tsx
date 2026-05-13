@@ -25,9 +25,10 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Info, AlertTriangle, Lock } from 'lucide-react';
 import {
     calculateAge,
-    calculateBmi,
     calculateDextroseCalories,
     calculateDextroseGramsPerDay,
     calculateGir,
@@ -52,7 +53,6 @@ import {
     initialOrderFormData,
     orderTabs,
     resolveWeightForComputation,
-    calculateQsVolumeMl,
     osmolarityPpnSolutionOptions,
     osmolarityLockTotalVolumeOptions,
     osmolarityDextroseConcentrationOptions,
@@ -98,15 +98,7 @@ export function OrderForm({
         Partial<Record<keyof TpnOrderFormData, boolean>>
     >({});
 
-    useEffect(() => {
-        setData({
-            ...initialOrderFormData,
-            ...initialData,
-        });
-
-        setActiveTab('patient');
-        setAttemptedRequiredFields({});
-    }, [initialData]);
+    const isClosed = initialData?.status === 'Completed';
 
     const computedAge = useMemo(() => {
         return calculateAge(data.date_of_birth);
@@ -118,10 +110,6 @@ export function OrderForm({
             data.current_weight_kg,
         );
     }, [data.birth_weight_kg, data.current_weight_kg]);
-
-    const computedBmi = useMemo(() => {
-        return calculateBmi(data.height_cm, computedWeightKg);
-    }, [data.height_cm, computedWeightKg]);
 
     const computedRateMlPerHour = useMemo(() => {
         return calculateInfusionRate(data.total_fluid_ml, data.duration_hours);
@@ -263,43 +251,72 @@ export function OrderForm({
         return formatVolumeDisplay(data.multivitamins_ml_day);
     }, [data.multivitamins_ml_day]);
 
+    const netBagOverfillVol = useMemo(() => {
+        const totalFluid = Number(data.total_fluid_ml) || 0;
+        const lipidVol = Number(lipidVolumeMl) || 0;
+        return (totalFluid - lipidVol) * 1.5;
+    }, [data.total_fluid_ml, lipidVolumeMl]);
+
     const heparinTotalIu = useMemo(() => {
-        const ml = Number(data.heparin_ml) || 0;
-        const iuPerMl = Number(data.heparin_iu_per_ml) || 0;
-        const total = ml * iuPerMl;
+        // Formula: 0.5 IU/mL * Net Bag Overfill Volume (Excluding Lipids)
+        const total = 0.5 * netBagOverfillVol;
         return total > 0 ? total.toFixed(2) : '';
-    }, [data.heparin_ml, data.heparin_iu_per_ml]);
+    }, [netBagOverfillVol]);
 
-    const lipidVolumeForQs = data.lipid_piggyback ? lipidVolumeMl : '';
+    useEffect(() => {
+        const tfr = Number(data.total_fluid_req_ml_kg_day);
+        const weight = Number(data.birth_weight_kg);
+        const lipidVol = Number(lipidVolumeMl) || 0;
 
-    const qsVolumeMl = useMemo(() => {
-        return calculateQsVolumeMl(data.total_fluid_ml, [
-            proteinVolumeMl,
-            dextroseVolumeMl,
-            lipidVolumeForQs,
-            sodiumVolumeMl,
-            potassiumVolumeMl,
-            calciumVolumeMl,
-            magnesiumVolumeMl,
-            phosphorusVolumeMl,
-            traceElementsVolumeMl,
-            multivitaminsVolumeMl,
-            data.heparin_ml,
-        ]);
+        if (Number.isFinite(tfr) && Number.isFinite(weight) && weight > 0) {
+            const computedTotalFluid = (tfr * weight).toFixed(1);
+            const computedOverfill = (Number(computedTotalFluid) * 1.5).toFixed(1);
+
+            if (
+                computedTotalFluid !== data.total_fluid_ml ||
+                computedOverfill !== data.total_fluid_with_overfill_ml
+            ) {
+                setData((prev) => ({
+                    ...prev,
+                    total_fluid_ml: computedTotalFluid,
+                    total_fluid_with_overfill_ml: computedOverfill,
+                }));
+            }
+        }
     }, [
+        data.total_fluid_req_ml_kg_day,
+        data.birth_weight_kg,
         data.total_fluid_ml,
-        proteinVolumeMl,
-        dextroseVolumeMl,
-        lipidVolumeForQs,
-        sodiumVolumeMl,
-        potassiumVolumeMl,
-        calciumVolumeMl,
-        magnesiumVolumeMl,
-        phosphorusVolumeMl,
-        traceElementsVolumeMl,
-        multivitaminsVolumeMl,
-        data.heparin_ml,
+        lipidVolumeMl,
     ]);
+
+    useEffect(() => {
+        const totalIu = Number(heparinTotalIu) || 0;
+        const computedMl = (totalIu / 1000).toFixed(3);
+        const fixedIuPerMl = '1000';
+
+        if (
+            computedMl !== data.heparin_ml ||
+            fixedIuPerMl !== data.heparin_iu_per_ml
+        ) {
+            setData((prev) => ({
+                ...prev,
+                heparin_ml: computedMl,
+                heparin_iu_per_ml: fixedIuPerMl,
+            }));
+        }
+    }, [heparinTotalIu, data.heparin_ml, data.heparin_iu_per_ml]);
+
+    useEffect(() => {
+        setData({
+            ...initialOrderFormData,
+            ...initialData,
+        });
+
+        setActiveTab('patient');
+        setAttemptedRequiredFields({});
+    }, [initialData]);
+
 
     const effectiveOsmolarityData = useMemo<TpnOrderFormData>(() => {
         const useOverrideOrComputed = (
@@ -316,11 +333,6 @@ export function OrderForm({
 
         const lipid20VolumeMl =
             data.lipid_concentration === '20' ? lipidVolumeMl : '';
-
-        const sterileWaterVolumeMl =
-            String(data.sterile_water_level_ml_day ?? '').trim() !== ''
-                ? data.sterile_water_level_ml_day
-                : qsVolumeMl;
 
         return {
             ...data,
@@ -353,11 +365,6 @@ export function OrderForm({
             osmolarity_lipid_20_ml: useOverrideOrComputed(
                 data.osmolarity_lipid_20_ml,
                 lipid20VolumeMl,
-            ),
-
-            osmolarity_sterile_water_ml: useOverrideOrComputed(
-                data.osmolarity_sterile_water_ml,
-                sterileWaterVolumeMl,
             ),
 
             osmolarity_calcium_gluconate_10_ml: useOverrideOrComputed(
@@ -400,7 +407,6 @@ export function OrderForm({
         proteinGramsPerDay,
         dextroseGramsPerDay,
         lipidVolumeMl,
-        qsVolumeMl,
         sodiumVolumeMl,
         potassiumVolumeMl,
         calciumVolumeMl,
@@ -441,8 +447,13 @@ export function OrderForm({
         Array<keyof TpnOrderFormData>
     > = {
         patient: ['last_name', 'first_name'],
-        clinical: ['current_weight_kg'],
-        requirements: ['total_fluid_ml', 'duration_hours', 'route'],
+        clinical: ['birth_weight_kg'],
+        requirements: [
+            'route',
+            'total_fluid_req_ml_kg_day',
+            'total_fluid_ml',
+            'duration_hours',
+        ],
         computation: [],
         review: [],
     };
@@ -451,10 +462,12 @@ export function OrderForm({
     {
         last_name: 'Last name',
         first_name: 'First name',
-        current_weight_kg: 'Current weight',
+        birth_weight_kg: 'Birth weight',
+        total_fluid_req_ml_kg_day: 'Total fluid requirement',
         total_fluid_ml: 'Total fluid',
+        total_fluid_with_overfill_ml: 'Total volume (x1.5 overfill)',
         duration_hours: 'Duration',
-        route: 'Infusion Route',
+        route: 'TPN Line',
     };
 
     function isRequiredFieldEmpty(field: keyof TpnOrderFormData) {
@@ -590,7 +603,6 @@ export function OrderForm({
                 data={data}
                 updateField={updateField}
                 computedWeightKg={computedWeightKg}
-                computedBmi={computedBmi}
                 getFieldErrorClass={getFieldErrorClass}
                 getFieldErrorMessage={getFieldErrorMessage}
             />
@@ -640,9 +652,9 @@ export function OrderForm({
                 totalNonProteinCaloriesPerKgDay={
                     totalNonProteinCaloriesPerKgDay
                 }
-                qsVolumeMl={qsVolumeMl}
                 multivitaminsVolumeMl={multivitaminsVolumeMl}
                 heparinTotalIu={heparinTotalIu}
+                netBagOverfillVol={netBagOverfillVol}
                 updateField={updateField}
             />
         ),
@@ -653,7 +665,6 @@ export function OrderForm({
                 isPeripheralDanger={isPeripheralDanger}
                 computedAge={computedAge}
                 computedWeightKg={computedWeightKg}
-                computedBmi={computedBmi}
                 computedRateMlPerHour={computedRateMlPerHour}
                 proteinGramsPerDay={proteinGramsPerDay}
                 proteinCalories={proteinCalories}
@@ -682,15 +693,26 @@ export function OrderForm({
                 totalNonProteinCaloriesPerKgDay={
                     totalNonProteinCaloriesPerKgDay
                 }
-                qsVolumeMl={qsVolumeMl}
                 multivitaminsVolumeMl={multivitaminsVolumeMl}
                 heparinTotalIu={heparinTotalIu}
+                netBagOverfillVol={netBagOverfillVol}
             />
         ),
     };
 
     return (
-        <div className="flex h-full min-h-0 flex-col">
+        <div className="flex h-full flex-col gap-6">
+            {isClosed && (
+                <Alert className="border-slate-200 bg-slate-50 text-slate-600">
+                    <Lock className="h-4 w-4" />
+                    <AlertTitle className="font-semibold">Order Closed</AlertTitle>
+                    <AlertDescription>
+                        This TPN order has been completed and is now locked for
+                        further modifications.
+                    </AlertDescription>
+                </Alert>
+            )}
+
             <div className="shrink-0 border-b border-border pb-4">
                 <div className="grid gap-3 lg:grid-cols-5">
                     {orderTabs.map((tab, index) => {
@@ -810,14 +832,16 @@ export function OrderForm({
                                         Fix Osmolarity limits to submit
                                     </span>
                                 )}
-                                <Button
-                                    type="button"
-                                    onClick={handleSubmit}
-                                    className="cursor-pointer"
-                                    disabled={isSubmitting}
-                                >
-                                    {submitLabel}
-                                </Button>
+                                {!isClosed && (
+                                    <Button
+                                        type="button"
+                                        onClick={handleSubmit}
+                                        className="cursor-pointer"
+                                        disabled={isSubmitting}
+                                    >
+                                        {submitLabel}
+                                    </Button>
+                                )}
                             </div>
                         ) : (
                             <Button
@@ -854,7 +878,6 @@ type PatientInformationSectionProps = SectionProps & {
 
 type ClinicalDetailsSectionProps = SectionProps & {
     computedWeightKg: string;
-    computedBmi: string;
 };
 
 type TpnRequirementsSectionProps = SectionProps & {
@@ -893,9 +916,9 @@ type ComputationSectionProps = SectionProps & {
     proteinCalories: string;
     lipidCalories: string;
     totalNonProteinCaloriesPerKgDay: string;
-    qsVolumeMl: string;
     multivitaminsVolumeMl: string;
     heparinTotalIu: string;
+    netBagOverfillVol: number;
 };
 
 type ReviewSectionProps = {
@@ -904,7 +927,6 @@ type ReviewSectionProps = {
     isPeripheralDanger: boolean;
     computedAge: string;
     computedWeightKg: string;
-    computedBmi: string;
     computedRateMlPerHour: string;
     proteinGramsPerDay: string;
     proteinVolumeMl: string;
@@ -931,9 +953,9 @@ type ReviewSectionProps = {
     traceElementsMlPerDay: string;
     traceElementsVolumeMl: string;
     totalNonProteinCaloriesPerKgDay: string;
-    qsVolumeMl: string;
     multivitaminsVolumeMl: string;
     heparinTotalIu: string;
+    netBagOverfillVol: number;
 };
 
 function formatVolumeDisplay(value: string): string {
@@ -949,7 +971,10 @@ function formatVolumeDisplay(value: string): string {
 function formatContentDisplay(value: string): string {
     const numericValue = Number(value);
 
-    return numericValue.toFixed(1);
+    if (isNaN(numericValue)) return value;
+
+    // Use up to 3 decimal places but remove trailing zeros
+    return parseFloat(numericValue.toFixed(3)).toString();
 }
 
 function parseDateString(value: string | null | undefined): Date | undefined {
@@ -1264,7 +1289,7 @@ function PatientInformationSection({
                                     Male
                                 </SelectItem>
                                 <SelectItem
-                                    value="Male"
+                                    value="Female"
                                     className="cursor-pointer"
                                 >
                                     Female
@@ -1371,7 +1396,6 @@ function PatientInformationSection({
 function ClinicalDetailsSection({
     data,
     computedWeightKg,
-    computedBmi,
     updateField,
     getFieldErrorClass,
     getFieldErrorMessage,
@@ -1391,6 +1415,8 @@ function ClinicalDetailsSection({
                     <Field
                         label="Birth Weight by Kg"
                         htmlFor="birth_weight_kg"
+                        required
+                        error={getFieldErrorMessage?.('birth_weight_kg')}
                         style={{ gridColumn: 'span 4' }}
                     >
                         <Input
@@ -1404,14 +1430,13 @@ function ClinicalDetailsSection({
                                 )
                             }
                             placeholder="0.00"
+                            className={getFieldErrorClass?.('birth_weight_kg')}
                         />
                     </Field>
 
                     <Field
                         label="Current Weight by Kg"
                         htmlFor="current_weight_kg"
-                        required
-                        error={getFieldErrorMessage?.('current_weight_kg')}
                         style={{ gridColumn: 'span 3' }}
                     >
                         <Input
@@ -1425,66 +1450,10 @@ function ClinicalDetailsSection({
                                 )
                             }
                             placeholder="0.00"
-                            className={getFieldErrorClass?.(
-                                'current_weight_kg',
-                            )}
                         />
                     </Field>
 
-                    <Field
-                        label="Height by Cm"
-                        htmlFor="height_cm"
-                        style={{ gridColumn: 'span 4' }}
-                    >
-                        <Input
-                            id="height_cm"
-                            type="number"
-                            value={data.height_cm}
-                            onChange={(event) =>
-                                updateField('height_cm', event.target.value)
-                            }
-                            placeholder="0.00"
-                        />
-                    </Field>
 
-                    <Field
-                        label="Weight Used by Kg"
-                        htmlFor="computed_weight_kg"
-                        style={{ gridColumn: 'span 3' }}
-                    >
-                        <Input
-                            id="computed_weight_kg"
-                            value={computedWeightKg}
-                            placeholder="Auto-selected"
-                            readOnly
-                        />
-                    </Field>
-
-                    <Field
-                        label="BMI"
-                        htmlFor="bmi"
-                        style={{ gridColumn: 'span 3' }}
-                    >
-                        <Input
-                            id="bmi"
-                            value={computedBmi}
-                            placeholder="Auto-computed"
-                            readOnly
-                        />
-                    </Field>
-
-                    <div
-                        style={{
-                            gridColumn: 'span 6',
-                            alignSelf: 'end',
-                        }}
-                    >
-                        <div className="flex min-h-10 items-center rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs leading-relaxed text-emerald-800">
-                            Current weight will be used when it is greater than
-                            birth weight. Otherwise, birth weight will be used
-                            for computation.
-                        </div>
-                    </div>
 
                     <Field
                         label="Diagnosis / Clinical Notes"
@@ -1527,24 +1496,88 @@ function TpnRequirementsSection({
             <CardContent>
                 <Grid>
                     <Field
-                        label="Total Fluid by mL"
+                        label="TPN Line"
+                        htmlFor="route"
+                        required
+                        error={getFieldErrorMessage?.('route')}
+                        style={{ gridColumn: 'span 3' }}
+                    >
+                        <Select
+                            value={data.route}
+                            onValueChange={(value) =>
+                                updateField('route', value)
+                            }
+                        >
+                            <SelectTrigger
+                                id="route"
+                                className={`w-full ${getFieldErrorClass?.('route') ?? ''}`}
+                            >
+                                <SelectValue placeholder="Select route" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Central Line">
+                                    Central Line
+                                </SelectItem>
+                                <SelectItem value="Peripheral Line">
+                                    Peripheral Line
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </Field>
+
+                    <Field
+                        label="Total Fluid Requirement (mL/kg/day)"
+                        htmlFor="total_fluid_req_ml_kg_day"
+                        required
+                        error={getFieldErrorMessage?.(
+                            'total_fluid_req_ml_kg_day',
+                        )}
+                        style={{ gridColumn: 'span 3' }}
+                    >
+                        <Input
+                            id="total_fluid_req_ml_kg_day"
+                            type="number"
+                            value={data.total_fluid_req_ml_kg_day}
+                            onChange={(event) =>
+                                updateField(
+                                    'total_fluid_req_ml_kg_day',
+                                    event.target.value,
+                                )
+                            }
+                            placeholder="0.0"
+                            className={getFieldErrorClass?.(
+                                'total_fluid_req_ml_kg_day',
+                            )}
+                        />
+                    </Field>
+
+                    <Field
+                        label="Total Volume (mL)"
                         htmlFor="total_fluid_ml"
                         required
                         error={getFieldErrorMessage?.('total_fluid_ml')}
-                        style={{ gridColumn: 'span 3' }}
+                        style={{ gridColumn: '1 / span 3' }}
                     >
                         <Input
                             id="total_fluid_ml"
                             type="number"
                             value={data.total_fluid_ml}
-                            onChange={(event) =>
-                                updateField(
-                                    'total_fluid_ml',
-                                    event.target.value,
-                                )
-                            }
-                            placeholder="0"
+                            placeholder="Auto-computed"
+                            readOnly
                             className={getFieldErrorClass?.('total_fluid_ml')}
+                        />
+                    </Field>
+
+                    <Field
+                        label="Total Required Volume to make (mL)"
+                        htmlFor="total_fluid_with_overfill_ml"
+                        style={{ gridColumn: 'span 3' }}
+                    >
+                        <Input
+                            id="total_fluid_with_overfill_ml"
+                            value={data.total_fluid_with_overfill_ml}
+                            placeholder="Auto-computed"
+                            readOnly
                         />
                     </Field>
 
@@ -1571,7 +1604,7 @@ function TpnRequirementsSection({
                     </Field>
 
                     <Field
-                        label="Rate by mL/hr"
+                        label="Rate (mL/hr)"
                         htmlFor="rate_ml_per_hour"
                         style={{ gridColumn: 'span 3' }}
                     >
@@ -1581,33 +1614,6 @@ function TpnRequirementsSection({
                             placeholder="Auto-computed"
                             readOnly
                         />
-                    </Field>
-
-                    <Field
-                        label="Infusion Route"
-                        htmlFor="route"
-                        required
-                        error={getFieldErrorMessage?.('route')}
-                        style={{ gridColumn: 'span 3' }}
-                    >
-                        <Select
-                            value={data.route}
-                            onValueChange={(value) =>
-                                updateField('route', value)
-                            }
-                        >
-                            <SelectTrigger id="route" className={`w-full ${getFieldErrorClass?.('route') ?? ''}`}>
-                                <SelectValue placeholder="Select route" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="Central Line">
-                                    Central Line
-                                </SelectItem>
-                                <SelectItem value="Peripheral Line">
-                                    Peripheral Line
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
                     </Field>
 
                     <div style={{ gridColumn: '1 / -1' }}>
@@ -1656,9 +1662,9 @@ function ComputationSection({
     proteinCalories,
     lipidCalories,
     totalNonProteinCaloriesPerKgDay,
-    qsVolumeMl,
     multivitaminsVolumeMl,
     heparinTotalIu,
+    netBagOverfillVol,
 }: ComputationSectionProps) {
     return (
         <div className="space-y-4">
@@ -1749,44 +1755,18 @@ function ComputationSection({
                                 }
                             />
 
-                            <div className="mt-3 grid gap-2">
-                                <Label>Lipid Concentration</Label>
+                            <div className="mt-3 flex items-center justify-between gap-2 rounded-md border border-border/70 bg-muted/20 px-3 py-2">
+                                <span className="text-xs font-medium text-muted-foreground uppercase">
+                                    Concentration
+                                </span>
+                                <span className="text-sm font-semibold">20%</span>
+                            </div>
 
-                                <div className="flex flex-wrap gap-4 rounded-md border border-border/70 bg-background px-3 py-2">
-                                    <label className="flex cursor-pointer items-center gap-2 text-sm">
-                                        <input
-                                            type="radio"
-                                            checked={
-                                                data.lipid_concentration ===
-                                                '20'
-                                            }
-                                            onChange={() =>
-                                                updateField(
-                                                    'lipid_concentration',
-                                                    '20',
-                                                )
-                                            }
-                                        />
-                                        20%
-                                    </label>
-
-                                    <label className="flex cursor-pointer items-center gap-2 text-sm">
-                                        <input
-                                            type="radio"
-                                            checked={
-                                                data.lipid_concentration ===
-                                                '10'
-                                            }
-                                            onChange={() =>
-                                                updateField(
-                                                    'lipid_concentration',
-                                                    '10',
-                                                )
-                                            }
-                                        />
-                                        10%
-                                    </label>
-                                </div>
+                            <div className="mt-2 flex items-center justify-between gap-2 rounded-md border border-border/70 bg-muted/20 px-3 py-2">
+                                <span className="text-xs font-medium text-muted-foreground uppercase">
+                                    Infusion
+                                </span>
+                                <span className="text-sm font-semibold">Separate IV line</span>
                             </div>
 
                             <div className="mt-3">
@@ -1825,34 +1805,6 @@ function ComputationSection({
                                     value={lipidRateMlPerHour}
                                     unit="mL/hr"
                                 />
-                            </div>
-
-                            <div className="mt-4 grid gap-2 rounded-md border border-border/70 bg-muted/30 p-3">
-                                <label className="flex items-center gap-2 text-sm">
-                                    <Checkbox
-                                        checked={data.lipid_piggyback}
-                                        onCheckedChange={(checked) =>
-                                            updateField(
-                                                'lipid_piggyback',
-                                                checked === true,
-                                            )
-                                        }
-                                    />
-                                    As Piggyback into PN solution
-                                </label>
-
-                                <label className="flex items-center gap-2 text-sm">
-                                    <Checkbox
-                                        checked={data.lipid_separate_line}
-                                        onCheckedChange={(checked) =>
-                                            updateField(
-                                                'lipid_separate_line',
-                                                checked === true,
-                                            )
-                                        }
-                                    />
-                                    As Separate IV line
-                                </label>
                             </div>
                         </MacronutrientCard>
                     </div>
@@ -2023,7 +1975,7 @@ function ComputationSection({
                             }
                             result={
                                 formatContentDisplay(traceElementsMlPerDay)
-                                    ? `${formatContentDisplay(traceElementsMlPerDay)} mL/day / ${formatContentDisplay(traceElementsVolumeMl)} mL`
+                                    ? `${formatContentDisplay(traceElementsVolumeMl)} mL`
                                     : '—'
                             }
                         />
@@ -2048,7 +2000,7 @@ function ComputationSection({
                             }
                             result={
                                 formatContentDisplay(data.multivitamins_ml_day)
-                                    ? `${formatContentDisplay(data.multivitamins_ml_day)} mL/day / ${formatContentDisplay(multivitaminsVolumeMl)} mL`
+                                    ? `${formatContentDisplay(multivitaminsVolumeMl)} mL`
                                     : '—'
                             }
                         />
@@ -2056,59 +2008,22 @@ function ComputationSection({
                         <AdditiveTableRow
                             label="Heparin"
                             input={
-                                <div className="flex flex-wrap items-center gap-2">
+                                <div className="flex flex-wrap items-center gap-1 rounded bg-muted/50 px-2 py-1 text-[10px] text-muted-foreground">
+                                    <span>0.5 IU/mL × </span>
                                     <ComputationNumberInput
-                                        value={data.heparin_ml}
-                                        onChange={(value) =>
-                                            updateField('heparin_ml', value)
-                                        }
+                                        value={String(netBagOverfillVol.toFixed(1)) || '0'}
+                                        readOnly
                                     />
-                                    <span className="text-sm text-muted-foreground">
-                                        mL
-                                    </span>
-                                    <span className="text-sm font-medium">×</span>
-                                    <ComputationNumberInput
-                                        value={data.heparin_iu_per_ml}
-                                        onChange={(value) =>
-                                            updateField('heparin_iu_per_ml', value)
-                                        }
-                                    />
-                                    <span className="text-sm text-muted-foreground">
-                                        I.U./mL
-                                    </span>
+                                    <span> / 1000 IU/mL</span>
                                 </div>
                             }
                             result={
-                                formatContentDisplay(heparinTotalIu)
-                                    ? `${formatContentDisplay(heparinTotalIu)} I.U.`
+                                data.heparin_ml
+                                    ? `${data.heparin_ml} mL`
                                     : '—'
                             }
                         />
 
-                        <AdditiveTableRow
-                            label="QS / Sterile Water"
-                            input={
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <ComputationNumberInput
-                                        value={data.sterile_water_level_ml_day}
-                                        onChange={(value) =>
-                                            updateField(
-                                                'sterile_water_level_ml_day',
-                                                value,
-                                            )
-                                        }
-                                    />
-                                    <span className="text-sm text-muted-foreground">
-                                        mL
-                                    </span>
-                                </div>
-                            }
-                            result={
-                                formatContentDisplay(qsVolumeMl)
-                                    ? `${formatContentDisplay(qsVolumeMl)} mL (Recommended)`
-                                    : '—'
-                            }
-                        />
                     </div>
                 </CardContent>
             </Card>
@@ -2360,18 +2275,22 @@ function ComputationNumberInput({
     id,
     value,
     onChange,
+    readOnly = false,
 }: {
     id?: string;
     value: string;
-    onChange: (value: string) => void;
+    onChange?: (value: string) => void;
+    readOnly?: boolean;
 }) {
     return (
         <Input
             id={id}
             type="number"
             value={value}
-            onChange={(event) => onChange(event.target.value)}
-            className="h-8 w-24 border-border bg-white text-center shadow-sm focus-visible:ring-[#2f7d32]"
+            onChange={(event) => onChange?.(event.target.value)}
+            readOnly={readOnly}
+            className={`h-8 w-24 border-border text-center shadow-sm focus-visible:ring-[#2f7d32] ${readOnly ? 'bg-muted/20' : 'bg-white'
+                }`}
         />
     );
 }
@@ -2382,7 +2301,6 @@ function ReviewSection({
     isPeripheralDanger,
     computedAge,
     computedWeightKg,
-    computedBmi,
     computedRateMlPerHour,
     proteinGramsPerDay,
     proteinVolumeMl,
@@ -2409,8 +2327,9 @@ function ReviewSection({
     traceElementsMlPerDay,
     traceElementsVolumeMl,
     totalNonProteinCaloriesPerKgDay,
-    qsVolumeMl,
     multivitaminsVolumeMl,
+    heparinTotalIu,
+    netBagOverfillVol,
 }: ReviewSectionProps) {
     const patientName = getPatientName(data);
 
@@ -2464,18 +2383,43 @@ function ReviewSection({
 
                     <ReviewRow
                         label="Birth Weight"
-                        value={data.birth_weight_kg}
+                        value={
+                            data.birth_weight_kg
+                                ? `${data.birth_weight_kg} kg`
+                                : '-'
+                        }
                     />
                     <ReviewRow
                         label="Current Weight"
-                        value={data.current_weight_kg}
+                        value={
+                            data.current_weight_kg
+                                ? `${data.current_weight_kg} kg`
+                                : '-'
+                        }
                     />
-                    <ReviewRow label="Weight Used" value={computedWeightKg} />
-                    <ReviewRow label="Height" value={data.height_cm} />
-                    <ReviewRow label="BMI" value={computedBmi} />
                     <ReviewRow
-                        label="Total Fluid"
-                        value={data.total_fluid_ml}
+                        label="Total Fluid Requirement"
+                        value={
+                            data.total_fluid_req_ml_kg_day
+                                ? `${data.total_fluid_req_ml_kg_day} mL/kg/day`
+                                : '-'
+                        }
+                    />
+                    <ReviewRow
+                        label="Total Volume"
+                        value={
+                            data.total_fluid_ml
+                                ? `${data.total_fluid_ml} mL`
+                                : '-'
+                        }
+                    />
+                    <ReviewRow
+                        label="Total Required Volume to make"
+                        value={
+                            data.total_fluid_with_overfill_ml
+                                ? `${data.total_fluid_with_overfill_ml} mL`
+                                : '-'
+                        }
                     />
                     <ReviewRow
                         label="Duration"
@@ -2493,7 +2437,7 @@ function ReviewSection({
                                 : ''
                         }
                     />
-                    <ReviewRow label="Route" value={data.route} />
+                    <ReviewRow label="TPN Line" value={data.route} />
                 </div>
 
                 <div className="grid gap-4 rounded-lg border border-border/80 bg-muted/30 p-4 lg:col-span-2">
@@ -2665,14 +2609,6 @@ function ReviewSection({
                                         : ''
                                 }
                             />
-                            <ReviewRow
-                                label="QS / Sterile Water"
-                                value={
-                                    data.sterile_water_level_ml_day
-                                        ? `${data.sterile_water_level_ml_day} mL`
-                                        : ''
-                                }
-                            />
                         </div>
                     </div>
 
@@ -2698,9 +2634,12 @@ function ReviewSection({
                         />
 
                         {isPeripheralDanger ? (
-                            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-                                Peripheral line osmolarity is above the safe limit. Please adjust the formulation before submitting.
-                            </div>
+                            <Alert variant="destructive" className="border-red-200 bg-red-50 py-2">
+                                <AlertTriangle className="h-4 w-4" />
+                                <AlertDescription className="text-xs font-semibold">
+                                    Osmolarity exceeds 900 mOsm/L for Peripheral Line. Adjust formulation before submitting.
+                                </AlertDescription>
+                            </Alert>
                         ) : null}
                     </div>
 
@@ -2810,7 +2749,7 @@ function buildOsmolarityInputsPayload(data: TpnOrderFormData) {
             lipid_10_ml: data.osmolarity_lipid_10_ml,
             lipid_20_ml: data.osmolarity_lipid_20_ml,
             novamine_15_grams: data.osmolarity_novamine_15_grams,
-            sterile_water_ml: data.osmolarity_sterile_water_ml,
+            sterile_water_ml: '',
         },
 
         additives: {
@@ -2944,7 +2883,25 @@ function GlobalRphOsmolarityCalculator({
                 </CardTitle>
             </CardHeader>
 
-            <CardContent className="pt-6">
+            <CardContent>
+                {isPeripheralDanger ? (
+                    <Alert variant="destructive" className="mb-6 border-red-200 bg-red-50 text-red-900">
+                        <AlertTriangle className="h-4 w-4 text-red-600" />
+                        <AlertTitle className="font-bold">Limit Exceeded</AlertTitle>
+                        <AlertDescription>
+                            The calculated osmolarity (<strong>{computedOsmolarity} mOsm/L</strong>) exceeds the safety limit of <strong>900 mOsm/L</strong> for Peripheral Line administration. Please adjust the components or switch to a Central Line.
+                        </AlertDescription>
+                    </Alert>
+                ) : (
+                    <Alert className="mb-6 border-blue-200 bg-blue-50 text-blue-900">
+                        <Info className="h-4 w-4 text-blue-600" />
+                        <AlertTitle className="font-semibold">Osmolarity Guideline</AlertTitle>
+                        <AlertDescription>
+                            For Peripheral Line administration, the total osmolarity must not exceed 900 mOsm/L to minimize the risk of phlebitis.
+                        </AlertDescription>
+                    </Alert>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
 
                     {/* LEFT COLUMN: BASE SOLUTION */}

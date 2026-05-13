@@ -21,7 +21,6 @@ import {
 } from '@/components/ui/card';
 import {
     calculateAge,
-    calculateBmi,
     calculateCalciumContentPerDay,
     calculateCalciumVolumeMl,
     calculateDextroseCalories,
@@ -170,8 +169,6 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
         order.birth_weight_kg,
         order.current_weight_kg,
     );
-
-    const bmi = calculateBmi(order.height_cm, computedWeightKg);
 
     const infusionRate = calculateInfusionRate(
         order.total_fluid_ml,
@@ -382,18 +379,6 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                 value={withUnit(order.current_weight_kg, 'kg')}
                             />
                             <InfoItem
-                                label="Weight Used"
-                                value={withUnit(computedWeightKg, 'kg')}
-                            />
-                            <InfoItem
-                                label="Height"
-                                value={withUnit(order.height_cm, 'cm')}
-                            />
-                            <InfoItem
-                                label="BMI"
-                                value={formatContentDisplay(bmi)}
-                            />
-                            <InfoItem
                                 label="Diagnosis / Clinical Notes"
                                 value={order.diagnosis}
                             />
@@ -415,8 +400,22 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                     <CardContent>
                         <InfoGrid>
                             <InfoItem
+                                label="Total Fluid Req"
+                                value={withUnit(
+                                    order.total_fluid_req_ml_kg_day,
+                                    'mL/kg/day',
+                                )}
+                            />
+                            <InfoItem
                                 label="Total Fluid"
                                 value={withUnit(order.total_fluid_ml, 'mL')}
+                            />
+                            <InfoItem
+                                label="Total Vol (x1.5)"
+                                value={withUnit(
+                                    order.total_fluid_with_overfill_ml,
+                                    'mL',
+                                )}
                             />
                             <InfoItem
                                 label="Duration"
@@ -430,7 +429,7 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                 label="Rate"
                                 value={withUnit(infusionRate, 'mL/hr')}
                             />
-                            <InfoItem label="Route" value={order.route} />
+                             <InfoItem label="TPN Line" value={order.route} />
                         </InfoGrid>
                     </CardContent>
                 </Card>

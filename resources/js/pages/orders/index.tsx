@@ -312,7 +312,7 @@ export default function OrdersIndex({
                                             Sex
                                         </th>
                                         <th className="px-5 py-3 text-center font-semibold">
-                                            Current Weight
+                                            Weight (Kg)
                                         </th>
                                         <th className="px-5 py-3 text-center font-semibold">
                                             Ward
@@ -365,9 +365,9 @@ export default function OrdersIndex({
                                                 {order.sex || 'N/A'}
                                             </td>
                                             <td className="px-5 py-4 text-center text-slate-700">
-                                                {order.current_weight_kg ||
-                                                    order.birth_weight_kg
-                                                    ? `${order.current_weight_kg || order.birth_weight_kg} kg`
+                                                {order.birth_weight_kg ||
+                                                    order.current_weight_kg
+                                                    ? `${order.birth_weight_kg || order.current_weight_kg} kg`
                                                     : 'N/A'}
                                             </td>
                                             <td className="px-5 py-4 text-center text-slate-700">

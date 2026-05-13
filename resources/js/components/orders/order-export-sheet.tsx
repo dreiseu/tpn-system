@@ -2,7 +2,6 @@ import dohLogoUrl from '../../../images/DOH Logo.png';
 import bghmcLogoUrl from '../../../images/BGHMC logo hi-res.png';
 import {
     calculateAge,
-    calculateBmi,
     calculateCalciumContentPerDay,
     calculateCalciumVolumeMl,
     calculateDextroseCalories,
@@ -19,7 +18,6 @@ import {
     calculatePotassiumVolumeMl,
     calculateProteinCalories,
     calculateProteinVolumeMl,
-    calculateQsVolumeMl,
     calculateRateMlPerHour,
     calculateSodiumVolumeMl,
     calculateTotalNonProteinCaloriesPerKgDay,
@@ -52,7 +50,18 @@ function formatContentDisplay(value: string | number | null | undefined): string
         return '';
     }
 
-    return numericValue.toFixed(1);
+    // Use up to 3 decimal places but remove trailing zeros
+    return parseFloat(numericValue.toFixed(3)).toString();
+}
+
+function formatHeparinDisplay(value: string | number | null | undefined): string {
+    const numericValue = Number(value);
+
+    if (!Number.isFinite(numericValue) || numericValue <= 0) {
+        return '';
+    }
+
+    return numericValue.toFixed(3);
 }
 
 function formatQsCalculationValue(value: string | number | null | undefined): string {
@@ -288,24 +297,8 @@ export function OrderExportSheet({
     const multivitaminsVolumeMl = order.multivitamins_ml_day || '';
     const heparinVolumeMl = (order as any).heparin_ml || '';
 
-    const lipidVolumeForQs = order.lipid_piggyback ? lipidVolumeMl : '';
-
-    const qsVolumeMl = calculateQsVolumeMl(
-        formatQsCalculationValue(order.total_fluid_ml),
-        [
-            formatQsCalculationValue(proteinVolumeMl),
-            formatQsCalculationValue(dextroseVolumeMl),
-            formatQsCalculationValue(lipidVolumeForQs),
-            formatQsCalculationValue(sodiumVolumeMl),
-            formatQsCalculationValue(potassiumVolumeMl),
-            formatQsCalculationValue(calciumVolumeMl),
-            formatQsCalculationValue(magnesiumVolumeMl),
-            formatQsCalculationValue(phosphorusVolumeMl),
-            formatQsCalculationValue(traceElementsVolumeMl),
-            formatQsCalculationValue(multivitaminsVolumeMl),
-            formatQsCalculationValue(heparinVolumeMl),
-        ],
-    );
+    const netBagOverfillVol =
+        (Number(order.total_fluid_ml || 0) - Number(lipidVolumeMl || 0)) * 1.5;
 
     const totalNonProteinCaloriesPerKgDay =
         calculateTotalNonProteinCaloriesPerKgDay(
@@ -516,9 +509,10 @@ export function OrderExportSheet({
                     padding: 6px 4px !important;
                 }
                 
-                .tpn-col-comp { width: 55%; }
-                .tpn-col-content { width: 22%; text-align: center; }
-                .tpn-col-vol { width: 23%; text-align: center; }
+                .tpn-col-comp { width: 42%; }
+                .tpn-col-content { width: 18%; text-align: center; }
+                .tpn-col-vol { width: 20%; text-align: center; }
+                .tpn-col-req-vol { width: 20%; text-align: center; }
 
                 .tpn-export-footer {
                     margin-top: 20px;
@@ -664,13 +658,13 @@ export function OrderExportSheet({
                                 className="tpn-patient-label"
                                 style={{ marginRight: '10px' }}
                             >
-                                Admission ID:
+                                Hospital Number:
                             </span>
                             <UnderlineValue
                                 className="fluid"
                                 style={{ fontWeight: 'bold' }}
                             >
-                                {order.order_no}
+                                {order.hospital_number}
                             </UnderlineValue>
                         </div>
                     </div>
@@ -848,23 +842,13 @@ export function OrderExportSheet({
                         </UnderlineValue>{' '}
                         <span style={{ marginLeft: '4px' }}>kg</span>
                     </div>
-                    <div
-                        style={{
-                            fontSize: '8px',
-                            fontStyle: 'italic',
-                            marginLeft: '75px',
-                            marginBottom: '8px',
-                        }}
-                    >
-                        Use Current Weight in computation if Current Weight is
-                        more than the Birth Weight
-                    </div>
 
                     <div
                         style={{
                             display: 'flex',
                             alignItems: 'center',
-                            marginBottom: '8px',
+                            marginTop: '10px',
+                            marginBottom: '2px',
                         }}
                     >
                         <span
@@ -899,7 +883,27 @@ export function OrderExportSheet({
                             Total Fluid Req:
                         </span>
                         <UnderlineValue className="medium">
+                            {order.total_fluid_req_ml_kg_day}
+                        </UnderlineValue>{' '}
+                        <span style={{ marginLeft: '4px' }}>mL/kg/day</span>
+                        <span
+                            className="tpn-patient-label"
+                            style={{ marginLeft: '25px', marginRight: '10px' }}
+                        >
+                            Total Fluid:
+                        </span>
+                        <UnderlineValue className="medium">
                             {order.total_fluid_ml}
+                        </UnderlineValue>{' '}
+                        <span style={{ marginLeft: '4px' }}>mL</span>
+                        <span
+                            className="tpn-patient-label"
+                            style={{ marginLeft: '25px', marginRight: '10px' }}
+                        >
+                            Total Required Volume:
+                        </span>
+                        <UnderlineValue className="medium">
+                            {order.total_fluid_with_overfill_ml}
                         </UnderlineValue>{' '}
                         <span style={{ marginLeft: '4px' }}>mL</span>
                         <span
@@ -912,24 +916,14 @@ export function OrderExportSheet({
                             {infusionRate}
                         </UnderlineValue>{' '}
                         <span style={{ marginLeft: '4px' }}>
-                            mL/hr. to run over 24 hrs
+                            mL/hr. to run over {order.duration_hours} hrs
                         </span>
                     </div>
-                    
+
                 </div>
 
                 <div style={{ marginTop: '14px', fontWeight: 'bold' }}>
                     CONTENTS:{' '}
-                    <span
-                        style={{
-                            fontSize: '9px',
-                            fontWeight: 'normal',
-                            fontStyle: 'italic',
-                        }}
-                    >
-                        (Please see recommendations for initiation of Parenteral
-                        Nutrition at the back)
-                    </span>
                 </div>
 
                 <table className="tpn-comp-table">
@@ -937,7 +931,8 @@ export function OrderExportSheet({
                         <tr>
                             <th className="tpn-col-comp">COMPUTATIONS</th>
                             <th className="tpn-col-content">CONTENTS</th>
-                            <th className="tpn-col-vol">VOLUME (x1.5mL)</th>
+                            <th className="tpn-col-vol">VOLUME (mL)</th>
+                            <th className="tpn-col-req-vol">REQUIRED VOLUME TO MAKE (mL)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -989,6 +984,22 @@ export function OrderExportSheet({
                                 <BlankLine
                                     width="45px"
                                     text={formatContentDisplay(proteinVolumeMl)}
+                                />{' '}
+                                mL
+                            </td>
+                            <td
+                                className="tpn-col-req-vol"
+                                style={{
+                                    verticalAlign: 'bottom',
+                                    paddingBottom: '16px',
+                                    backgroundColor: '#f9fafb',
+                                }}
+                            >
+                                <BlankLine
+                                    width="45px"
+                                    text={formatContentDisplay(
+                                        Number(proteinVolumeMl) * 1.5,
+                                    )}
                                 />{' '}
                                 mL
                             </td>
@@ -1054,6 +1065,22 @@ export function OrderExportSheet({
                                 />{' '}
                                 mL
                             </td>
+                            <td
+                                className="tpn-col-req-vol"
+                                style={{
+                                    verticalAlign: 'bottom',
+                                    paddingBottom: '16px',
+                                    backgroundColor: '#f9fafb',
+                                }}
+                            >
+                                <BlankLine
+                                    width="45px"
+                                    text={formatContentDisplay(
+                                        Number(dextroseVolumeMl) * 1.5,
+                                    )}
+                                />{' '}
+                                mL
+                            </td>
                         </tr>
 
                         {/* Fat Section */}
@@ -1066,6 +1093,23 @@ export function OrderExportSheet({
                                     }}
                                 >
                                     Fat
+                                </div>
+                                <div
+                                    style={{
+                                        paddingLeft: '16px',
+                                        marginTop: '6px',
+                                        marginBottom: '4px',
+                                    }}
+                                >
+                                    Infusion Route: Separate IV line
+                                </div>
+                                <div
+                                    style={{
+                                        paddingLeft: '16px',
+                                        marginTop: '6px',
+                                    }}
+                                >
+                                    20% Lipid Emulsion
                                 </div>
                                 <div style={{ paddingLeft: '16px' }}>
                                     <BlankLine
@@ -1100,34 +1144,16 @@ export function OrderExportSheet({
                                     />{' '}
                                     g/day
                                 </div>
+
                                 <div
                                     style={{
                                         paddingLeft: '16px',
                                         marginTop: '6px',
                                     }}
                                 >
-                                    <CircleCheck
-                                        checked={
-                                            order.lipid_concentration === '20'
-                                        }
-                                        label="20%"
-                                    />
-                                    <CircleCheck
-                                        checked={
-                                            order.lipid_concentration === '10'
-                                        }
-                                        label="10%"
-                                    />
-                                </div>
-                                <div
-                                    style={{
-                                        paddingLeft: '32px',
-                                        marginTop: '6px',
-                                    }}
-                                >
                                     Infuse{' '}
                                     <BlankLine
-                                        width="35px"
+                                        width="23px"
                                         text={formatContentDisplay(lipidVolumeMl)}
                                     />{' '}
                                     mL of emulsion at{' '}
@@ -1144,33 +1170,7 @@ export function OrderExportSheet({
                                     />{' '}
                                     hrs
                                 </div>
-                                <div
-                                    style={{
-                                        paddingLeft: '16px',
-                                        marginTop: '6px',
-                                    }}
-                                >
-                                    As{' '}
-                                    <CircleCheck
-                                        checked={order.lipid_piggyback === true}
-                                        label="Piggyback into PN solution"
-                                    />
-                                </div>
-                                <div
-                                    style={{
-                                        paddingLeft: '16px',
-                                        marginTop: '2px',
-                                        marginBottom: '4px',
-                                    }}
-                                >
-                                    As{' '}
-                                    <CircleCheck
-                                        checked={
-                                            order.lipid_piggyback === false
-                                        }
-                                        label="Separate IV line"
-                                    />
-                                </div>
+
                             </td>
                             <td
                                 className="tpn-col-content"
@@ -1182,7 +1182,7 @@ export function OrderExportSheet({
                                 <BlankLine width="35px" text={lipidVolumeMl} />{' '}
                                 mL /{' '}
                                 <BlankLine
-                                    width="25px"
+                                    width="20px"
                                     text={order.lipid_duration_hours || '24'}
                                 />{' '}
                                 hrs
@@ -1195,6 +1195,22 @@ export function OrderExportSheet({
                                 }}
                             >
                                 <BlankLine width="45px" text={lipidVolumeMl} />{' '}
+                                mL
+                            </td>
+                            <td
+                                className="tpn-col-req-vol"
+                                style={{
+                                    verticalAlign: 'bottom',
+                                    paddingBottom: '36px',
+                                    backgroundColor: '#f9fafb',
+                                }}
+                            >
+                                <BlankLine
+                                    width="45px"
+                                    text={formatContentDisplay(
+                                        Number(lipidVolumeMl) * 1.5,
+                                    )}
+                                />{' '}
                                 mL
                             </td>
                         </tr>
@@ -1219,6 +1235,10 @@ export function OrderExportSheet({
                             ></td>
                             <td
                                 className="tpn-col-vol"
+                                style={{ borderBottom: 'none' }}
+                            ></td>
+                            <td
+                                className="tpn-col-req-vol"
                                 style={{ borderBottom: 'none' }}
                             ></td>
                         </tr>
@@ -1331,6 +1351,18 @@ export function OrderExportSheet({
                                         />{' '}
                                         mL/day
                                     </td>
+                                    <td
+                                        className="tpn-col-req-vol"
+                                        style={{ ...cellStyle, backgroundColor: '#f9fafb' }}
+                                    >
+                                        <BlankLine
+                                            width="45px"
+                                            text={formatContentDisplay(
+                                                Number(item.vol) * 1.5,
+                                            )}
+                                        />{' '}
+                                        mL
+                                    </td>
                                 </tr>
                             );
                         })}
@@ -1349,23 +1381,104 @@ export function OrderExportSheet({
                                     Additives
                                 </div>
                             </td>
-                            <td colSpan={2} style={{ borderBottom: 'none' }}></td>
+                            <td
+                                className="tpn-col-content"
+                                style={{ borderBottom: 'none' }}
+                            ></td>
+                            <td
+                                className="tpn-col-vol"
+                                style={{ borderBottom: 'none' }}
+                            ></td>
+                            <td
+                                className="tpn-col-req-vol"
+                                style={{ borderBottom: 'none' }}
+                            ></td>
                         </tr>
 
                         {/* Trace Elements */}
                         <tr>
-                            <td className="tpn-col-comp" style={{ paddingLeft: '16px', borderTop: 'none', borderBottom: 'none', paddingTop: '2px', paddingBottom: '2px' }}>
-                                <span style={{ display: 'inline-block', width: '90px', fontWeight: 'bold' }}>
+                            <td
+                                className="tpn-col-comp"
+                                style={{
+                                    paddingLeft: '16px',
+                                    borderTop: 'none',
+                                    borderBottom: 'none',
+                                    paddingTop: '2px',
+                                    paddingBottom: '2px',
+                                }}
+                            >
+                                <span
+                                    style={{
+                                        display: 'inline-block',
+                                        width: '90px',
+                                        fontWeight: 'bold',
+                                    }}
+                                >
                                     Trace Elements
                                 </span>
-                                <BlankLine width="30px" text={order.trace_elements_ml_kg_day} /> mL/kg/day{' '}
-                                <span style={{ fontSize: '14px', margin: '0 4px' }}>X</span>{' '}
-                                <BlankLine width="30px" text={formatContentDisplay(weightForComputation)} /> kg
+                                <BlankLine
+                                    width="30px"
+                                    text={order.trace_elements_ml_kg_day}
+                                />{' '}
+                                mL/kg/day{' '}
+                                <span
+                                    style={{ fontSize: '14px', margin: '0 4px' }}
+                                >
+                                    X
+                                </span>{' '}
+                                <BlankLine
+                                    width="30px"
+                                    text={formatContentDisplay(
+                                        weightForComputation,
+                                    )}
+                                />{' '}
+                                kg
                             </td>
-                            <td colSpan={2} style={{ borderTop: 'none', borderBottom: 'none', paddingTop: '2px', paddingBottom: '2px', textAlign: 'center' }}>
+                            <td
+                                className="tpn-col-content"
+                                style={{
+                                    borderTop: 'none',
+                                    borderBottom: 'none',
+                                    paddingTop: '2px',
+                                    paddingBottom: '2px',
+                                }}
+                            >
+                                <BlankLine width="45px" text="" />
+                            </td>
+                            <td
+                                className="tpn-col-vol"
+                                style={{
+                                    borderTop: 'none',
+                                    borderBottom: 'none',
+                                    paddingTop: '2px',
+                                    paddingBottom: '2px',
+                                    textAlign: 'center',
+                                }}
+                            >
                                 <BlankLine
                                     width="45px"
-                                    text={formatContentDisplay(traceElementsVolumeMl)}
+                                    text={formatContentDisplay(
+                                        traceElementsVolumeMl,
+                                    )}
+                                />{' '}
+                                mL
+                            </td>
+                            <td
+                                className="tpn-col-req-vol"
+                                style={{
+                                    borderTop: 'none',
+                                    borderBottom: 'none',
+                                    paddingTop: '2px',
+                                    paddingBottom: '2px',
+                                    textAlign: 'center',
+                                    backgroundColor: '#f9fafb',
+                                }}
+                            >
+                                <BlankLine
+                                    width="45px"
+                                    text={formatContentDisplay(
+                                        Number(traceElementsVolumeMl) * 1.5,
+                                    )}
                                 />{' '}
                                 mL
                             </td>
@@ -1373,53 +1486,161 @@ export function OrderExportSheet({
 
                         {/* Multivitamins */}
                         <tr>
-                            <td className="tpn-col-comp" style={{ paddingLeft: '16px', borderTop: 'none', borderBottom: 'none', paddingTop: '2px', paddingBottom: '2px' }}>
-                                <span style={{ display: 'inline-block', width: '90px', fontWeight: 'bold' }}>
+                            <td
+                                className="tpn-col-comp"
+                                style={{
+                                    paddingLeft: '16px',
+                                    borderTop: 'none',
+                                    borderBottom: 'none',
+                                    paddingTop: '2px',
+                                    paddingBottom: '2px',
+                                }}
+                            >
+                                <span
+                                    style={{
+                                        display: 'inline-block',
+                                        width: '90px',
+                                        fontWeight: 'bold',
+                                    }}
+                                >
                                     Multivitamins
                                 </span>
-                                <BlankLine width="30px" text={order.multivitamins_ml_day} /> mL/day
+                                <BlankLine
+                                    width="30px"
+                                    text={order.multivitamins_ml_day}
+                                />{' '}
+                                mL/day
                             </td>
-                            <td colSpan={2} style={{ borderTop: 'none', borderBottom: 'none', paddingTop: '2px', paddingBottom: '2px', textAlign: 'center' }}>
-                                <BlankLine width="45px" text={formatContentDisplay(multivitaminsVolumeMl)} /> mL
+                            <td
+                                className="tpn-col-content"
+                                style={{
+                                    borderTop: 'none',
+                                    borderBottom: 'none',
+                                    paddingTop: '2px',
+                                    paddingBottom: '2px',
+                                }}
+                            >
+                                <BlankLine width="45px" text="" />
+                            </td>
+                            <td
+                                className="tpn-col-vol"
+                                style={{
+                                    borderTop: 'none',
+                                    borderBottom: 'none',
+                                    paddingTop: '2px',
+                                    paddingBottom: '2px',
+                                    textAlign: 'center',
+                                }}
+                            >
+                                <BlankLine
+                                    width="45px"
+                                    text={formatContentDisplay(
+                                        multivitaminsVolumeMl,
+                                    )}
+                                />{' '}
+                                mL
+                            </td>
+                            <td
+                                className="tpn-col-req-vol"
+                                style={{
+                                    borderTop: 'none',
+                                    borderBottom: 'none',
+                                    paddingTop: '2px',
+                                    paddingBottom: '2px',
+                                    textAlign: 'center',
+                                    backgroundColor: '#f9fafb',
+                                }}
+                            >
+                                <BlankLine
+                                    width="45px"
+                                    text={formatContentDisplay(
+                                        Number(multivitaminsVolumeMl) * 1.5,
+                                    )}
+                                />{' '}
+                                mL
                             </td>
                         </tr>
 
                         {/* Heparin */}
                         <tr>
-                            <td className="tpn-col-comp" style={{ paddingLeft: '16px', borderTop: 'none', borderBottom: '1px solid #000', paddingTop: '2px', paddingBottom: '8px' }}>
-                                <span style={{ display: 'inline-block', width: '90px', fontWeight: 'bold' }}>
-                                    Heparin
-                                </span>
-                                <BlankLine width="30px" text={order.heparin_ml} /> mL{' '}
-                                <span style={{ fontSize: '14px', margin: '0 4px' }}>X</span>{' '}
-                                <BlankLine width="30px" text={order.heparin_iu_per_ml} /> I.U./ml
-                            </td>
-                            <td colSpan={2} style={{ borderTop: 'none', borderBottom: '1px solid #000', paddingTop: '2px', paddingBottom: '8px', textAlign: 'center' }}>
-                                <BlankLine
-                                    width="45px"
-                                    text={formatContentDisplay(heparinTotal)}
-                                /> I.U.
-                            </td>
-                        </tr>
-
-                        {/* Sterile Water */}
-                        <tr>
                             <td
                                 className="tpn-col-comp"
                                 style={{
-                                    textAlign: 'left',
-                                    fontWeight: 'bold',
-                                    paddingRight: '20px',
-                                    paddingTop: '8px',
-                                    paddingBottom: '8px'
+                                    paddingLeft: '16px',
+                                    borderTop: 'none',
+                                    borderBottom: '1px solid #000',
+                                    paddingTop: '4px',
+                                    paddingBottom: '12px',
                                 }}
                             >
-                                Sterile Water / QS
+                                <span
+                                    style={{
+                                        display: 'inline-block',
+                                        width: '90px',
+                                        fontWeight: 'bold',
+                                    }}
+                                >
+                                    Heparin
+                                </span>
+                                <span>
+                                    0.5 IU/mL ×{' '}
+                                    <BlankLine
+                                        width="35px"
+                                        text={formatQsCalculationValue(
+                                            netBagOverfillVol,
+                                        )}
+                                    />{' '}
+                                    / 1000 IU/mL
+                                </span>
                             </td>
-                            <td colSpan={2} style={{ paddingTop: '8px', paddingBottom: '8px', textAlign: 'center' }}>
-                                <BlankLine width="45px" text={formatContentDisplay(qsVolumeMl)} /> mL
+                            <td
+                                className="tpn-col-content"
+                                style={{
+                                    borderTop: 'none',
+                                    borderBottom: '1px solid #000',
+                                    paddingTop: '4px',
+                                    paddingBottom: '2px',
+                                }}
+                            >
+                                <BlankLine width="45px" text="" />
+                            </td>
+                            <td
+                                className="tpn-col-vol"
+                                style={{
+                                    borderTop: 'none',
+                                    borderBottom: '1px solid #000',
+                                    paddingTop: '4px',
+                                    paddingBottom: '8px',
+                                    textAlign: 'center',
+                                }}
+                            >
+                                <BlankLine
+                                    width="45px"
+                                    text={formatHeparinDisplay(heparinMl)}
+                                />{' '}
+                                mL
+                            </td>
+                            <td
+                                className="tpn-col-req-vol"
+                                style={{
+                                    borderTop: 'none',
+                                    borderBottom: '1px solid #000',
+                                    paddingTop: '4px',
+                                    paddingBottom: '8px',
+                                    textAlign: 'center',
+                                    backgroundColor: '#f9fafb',
+                                }}
+                            >
+                                <BlankLine
+                                    width="45px"
+                                    text={formatHeparinDisplay(
+                                        Number(heparinMl) * 1.5,
+                                    )}
+                                />{' '}
+                                mL
                             </td>
                         </tr>
+
                     </tbody>
                 </table>
 
@@ -1499,6 +1720,18 @@ export function OrderExportSheet({
                         >
                             {osmolarityDisplay || '\u00a0'}
                         </strong>
+
+                        <span
+                            style={{
+                                fontWeight: 'normal',
+                                fontSize: '9px',
+                                marginLeft: '8px',
+                                color: '#444',
+                                fontStyle: 'italic'
+                            }}
+                        >
+                            Note: Value must not exceed 900 mOsm/L
+                        </span>
 
                         {order.osmolarity_notes ? (
                             <span

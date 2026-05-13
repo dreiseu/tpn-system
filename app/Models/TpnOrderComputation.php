@@ -35,7 +35,6 @@ class TpnOrderComputation extends Model
         'multivitamins_ml_day',
         'heparin_ml',
         'heparin_iu_per_ml',
-        'sterile_water_level_ml_day',
 
         'use_osmolarity_calculator',
 
@@ -70,7 +69,6 @@ class TpnOrderComputation extends Model
         'multivitamins_ml_day' => 'decimal:2',
         'heparin_ml' => 'decimal:2',
         'heparin_iu_per_ml' => 'decimal:2',
-        'sterile_water_level_ml_day' => 'decimal:2',
         'use_osmolarity_calculator' => 'boolean',
         'osmolarity_computed_mosm_l' => 'decimal:2',
 

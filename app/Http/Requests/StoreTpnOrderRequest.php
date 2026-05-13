@@ -38,10 +38,11 @@ class StoreTpnOrderRequest extends FormRequest
 
             'birth_weight_kg' => $this->nullIfEmpty($this->input('birth_weight_kg')),
             'current_weight_kg' => $this->nullIfEmpty($this->input('current_weight_kg')),
-            'height_cm' => $this->nullIfEmpty($this->input('height_cm')),
             'diagnosis' => $this->nullIfEmpty($this->input('diagnosis')),
 
+            'total_fluid_req_ml_kg_day' => $this->nullIfEmpty($this->input('total_fluid_req_ml_kg_day')),
             'total_fluid_ml' => $this->nullIfEmpty($this->input('total_fluid_ml')),
+            'total_fluid_with_overfill_ml' => $this->nullIfEmpty($this->input('total_fluid_with_overfill_ml')),
             'duration_hours' => $this->nullIfEmpty($this->input('duration_hours')),
             'route' => $this->nullIfEmpty($this->input('route')),
 
@@ -62,7 +63,6 @@ class StoreTpnOrderRequest extends FormRequest
             'multivitamins_ml_day' => $this->nullIfEmpty($this->input('multivitamins_ml_day')),
             'heparin_ml' => $this->nullIfEmpty($this->input('heparin_ml')),
             'heparin_iu_per_ml' => $this->nullIfEmpty($this->input('heparin_iu_per_ml')),
-            'sterile_water_level_ml_day' => $this->nullIfEmpty($this->input('sterile_water_level_ml_day', $this->input('sterile_water_ml_day'))),
 
             'osmolarity_notes' => $this->nullIfEmpty($this->input('osmolarity_notes')),
             'osmolarity_inputs_json' => $this->normalizeOsmolarityInputsJson(
@@ -93,12 +93,13 @@ class StoreTpnOrderRequest extends FormRequest
             'prescribing_physician' => ['nullable', 'string', 'max:150'],
             'is_initial_order' => ['boolean'],
 
-            'birth_weight_kg' => ['nullable', 'numeric', 'min:0'],
-            'current_weight_kg' => ['required', 'numeric', 'min:0.01'],
-            'height_cm' => ['nullable', 'numeric', 'min:0'],
+            'birth_weight_kg' => ['required', 'numeric', 'min:0.001'],
+            'current_weight_kg' => ['nullable', 'numeric', 'min:0'],
             'diagnosis' => ['nullable', 'string'],
 
+            'total_fluid_req_ml_kg_day' => ['required', 'numeric', 'min:0.01'],
             'total_fluid_ml' => ['required', 'numeric', 'min:0.01'],
+            'total_fluid_with_overfill_ml' => ['required', 'numeric', 'min:0.01'],
             'duration_hours' => ['required', 'numeric', 'min:0.01'],
             'route' => ['required', 'string', 'max:100'],
 
@@ -125,7 +126,6 @@ class StoreTpnOrderRequest extends FormRequest
             'multivitamins_ml_day' => ['nullable', 'numeric', 'min:0'],
             'heparin_ml' => ['nullable', 'numeric', 'min:0'],
             'heparin_iu_per_ml' => ['nullable', 'numeric', 'min:0'],
-            'sterile_water_level_ml_day' => ['nullable', 'numeric'],
 
             'use_osmolarity_calculator' => ['boolean'],
             'osmolarity_notes' => ['nullable', 'string'],
@@ -139,8 +139,10 @@ class StoreTpnOrderRequest extends FormRequest
         return [
             'last_name.required' => 'Last name is required.',
             'first_name.required' => 'First name is required.',
-            'current_weight_kg.required' => 'Current weight is required.',
-            'current_weight_kg.min' => 'Current weight must be greater than zero.',
+            'birth_weight_kg.required' => 'Birth weight is required.',
+            'birth_weight_kg.min' => 'Birth weight must be greater than zero.',
+            'total_fluid_req_ml_kg_day.required' => 'Total fluid requirement is required.',
+            'total_fluid_req_ml_kg_day.min' => 'Total fluid requirement must be greater than zero.',
             'total_fluid_ml.required' => 'Total fluid is required.',
             'total_fluid_ml.min' => 'Total fluid must be greater than zero.',
             'duration_hours.required' => 'Duration is required.',

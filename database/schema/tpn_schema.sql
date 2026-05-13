@@ -26,13 +26,14 @@ BEGIN
         -- Clinical Details
         prescribing_physician NVARCHAR(300) NULL,
         is_initial_order BIT NULL,
-        birth_weight_kg DECIMAL(10,2) NULL,
-        current_weight_kg DECIMAL(10,2) NULL,
-        height_cm DECIMAL(10,2) NULL,
+        birth_weight_kg DECIMAL(10,3) NULL,
+        current_weight_kg DECIMAL(10,3) NULL,
         diagnosis NVARCHAR(MAX) NULL,
         
         -- TPN Requirements
+        total_fluid_req_ml_kg_day DECIMAL(10,2) NULL,
         total_fluid_ml DECIMAL(10,2) NULL,
+        total_fluid_with_overfill_ml DECIMAL(10,2) NULL,
         duration_hours DECIMAL(10,2) NULL,
         route NVARCHAR(200) NULL,
         
@@ -74,7 +75,6 @@ BEGIN
         heparin_ml DECIMAL(10,2) NULL,
         heparin_units_per_ml DECIMAL(10,2) NULL,
         heparin_iu_per_ml DECIMAL(8,2) NULL,
-        sterile_water_level_ml_day DECIMAL(8,2) NULL,
         
         -- Osmolarity
         use_osmolarity_calculator BIT NOT NULL DEFAULT 0,

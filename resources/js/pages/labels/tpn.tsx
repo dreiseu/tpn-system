@@ -34,6 +34,7 @@ import {
     calculateCalciumContentPerDay,
     calculateCalciumVolumeMl,
     calculateDextroseVolumeMl,
+    calculateLipidVolumeMl,
     calculateMagnesiumVolumeMl,
     calculatePerKgPerDay,
     calculatePotassiumVolumeMl,
@@ -75,12 +76,12 @@ type TpnLabelData = {
     multivitaminsVolume: string;
     heparinDose: string;
     heparinVolume: string;
-    sterileWaterVolume: string;
     totalVolume: string;
     rate: string;
     duration: string;
     expiresOn: string;
     lipidText: string;
+    lipidVolume: string;
     preparedBy: string;
     dutyText: string;
     cautionText: string;
@@ -154,130 +155,115 @@ function formatLabelContentDisplay(value: unknown, fallback = '-') {
     return numericValue.toFixed(1);
 }
 
-function formatSterileWaterDisplay(value: unknown, fallback = '-') {
-    if (value === null || value === undefined) {
-        return fallback;
-    }
 
-    const numericValue = Number(value);
-
-    if (!Number.isFinite(numericValue)) {
-        return fallback;
-    }
-
-    return numericValue.toFixed(1);
-}
-
-function getSterileWaterFromOsmolarityInputs(order?: TpnOrder | null): string {
-    const rawJson = order?.osmolarity_inputs_json;
-
-    if (!rawJson) {
-        return '';
-    }
-
-    try {
-        const parsed =
-            typeof rawJson === 'string'
-                ? JSON.parse(rawJson)
-                : rawJson;
-
-        const sterileWaterValue =
-            parsed?.tpn?.sterile_water_ml ??
-            parsed?.ppn?.sterile_water_ml ??
-            parsed?.additives?.sterile_water_ml ??
-            '';
-
-        return String(sterileWaterValue ?? '').trim();
-    } catch {
-        return '';
-    }
-}
 
 function tpnLabelFromOrder(order?: TpnOrder | null): TpnLabelData {
     const weight = resolveWeightForComputation(
         order?.birth_weight_kg ?? '',
         order?.current_weight_kg ?? '',
     );
+
+    const lipidGrams = calculatePerKgPerDay(
+        order?.lipid_g_per_kg_day ?? '',
+        weight,
+    );
+    const lipidVolumeMl = calculateLipidVolumeMl(
+        lipidGrams,
+        order?.lipid_concentration ?? '20',
+    );
+
+    const totalFluidMl = Number(order?.total_fluid_ml) || 0;
+    const netBagVolume = totalFluidMl - (Number(lipidVolumeMl) || 0);
+    const netBagOverfillVol = netBagVolume * 1.5;
+
     const aminoAcidGrams = calculatePerKgPerDay(
         order?.protein_g_per_kg_day ?? '',
         weight,
     );
+    const aminoAcidVolumeBase = calculateProteinVolumeMl(aminoAcidGrams);
 
-    const sodiumDosePerDay = calculatePerKgPerDay(order?.sodium_meq_kg_day ?? '', weight);
-    const potassiumDosePerDay = calculatePerKgPerDay(order?.potassium_meq_kg_day ?? '', weight);
-    const magnesiumDosePerDay = calculatePerKgPerDay(order?.magnesium_meq_kg_day ?? '', weight);
-    const calciumDosePerDay = calculateCalciumContentPerDay(order?.calcium_mg_kg_day ?? '', weight);
+    const dextroseVolumeBase = calculateDextroseVolumeMl(
+        order?.total_fluid_ml ?? '',
+        order?.dextrose_percent ?? '',
+    );
+
+    const sodiumDosePerDay = calculatePerKgPerDay(
+        order?.sodium_meq_kg_day ?? '',
+        weight,
+    );
+    const sodiumVolumeBase = calculateSodiumVolumeMl(sodiumDosePerDay);
+
+    const potassiumDosePerDay = calculatePerKgPerDay(
+        order?.potassium_meq_kg_day ?? '',
+        weight,
+    );
+    const potassiumVolumeBase = calculatePotassiumVolumeMl(potassiumDosePerDay);
+
+    const magnesiumDosePerDay = calculatePerKgPerDay(
+        order?.magnesium_meq_kg_day ?? '',
+        weight,
+    );
+    const magnesiumVolumeBase = calculateMagnesiumVolumeMl(magnesiumDosePerDay);
+
+    const calciumDosePerDay = calculateCalciumContentPerDay(
+        order?.calcium_mg_kg_day ?? '',
+        weight,
+    );
+    const calciumVolumeBase = calculateCalciumVolumeMl(calciumDosePerDay);
+
     const traceElementDosePerDay = order?.trace_elements_ml_kg_day || '';
+    const traceElementVolumeBase = traceElementDosePerDay;
+
     const multivitaminsDosePerDay = order?.multivitamins_ml_day || '';
-    const heparinMl = Number(order?.heparin_ml);
-    const heparinIuPerMl = Number(order?.heparin_iu_per_ml);
+    const multivitaminsVolumeBase = multivitaminsDosePerDay;
 
-    const heparinDose =
-        Number.isFinite(heparinMl) &&
-            Number.isFinite(heparinIuPerMl) &&
-            heparinMl > 0 &&
-            heparinIuPerMl > 0
-            ? String(heparinMl * heparinIuPerMl)
-            : '';
+    // Heparin: (Net Bag Overfill * 0.5) / 1000
+    const heparinMl = (netBagOverfillVol * 0.5) / 1000;
+    const heparinDose = heparinMl * 1000;
 
-    const sterileWaterFromJson = getSterileWaterFromOsmolarityInputs(order);
-
-    const sterileWaterVolume =
-        String(order?.sterile_water_level_ml_day ?? '').trim() !== ''
-            ? order?.sterile_water_level_ml_day
-            : sterileWaterFromJson;
+    const overfill = (vol: string | number) => {
+        const n = Number(vol);
+        return n > 0 ? (n * 1.5).toFixed(1) : '-';
+    };
 
     return {
         alertLevel: 'high',
         patientName: order ? getPatientName(order) || '-' : '-',
         hospitalNumber: labelValue(order?.hospital_number),
-        ward: labelValue([order?.ward, order?.room].filter(Boolean).join(' / ')),
+        ward: labelValue(
+            [order?.ward, order?.room].filter(Boolean).join(' / '),
+        ),
         date: order?.order_date ? getOrderDateString(order.order_date) : today(),
         btlNumber: '-',
         aminoAcidDose: formatLabelContentDisplay(aminoAcidGrams),
-        aminoAcidVolume: formatLabelContentDisplay(
-            calculateProteinVolumeMl(aminoAcidGrams),
-        ),
+        aminoAcidVolume: overfill(aminoAcidVolumeBase),
 
         dextrosePercent: formatLabelContentDisplay(order?.dextrose_percent),
-        dextroseVolume: formatLabelContentDisplay(
-            calculateDextroseVolumeMl(
-                order?.total_fluid_ml ?? '',
-                order?.dextrose_percent ?? '',
-            ),
-        ),
+        dextroseVolume: overfill(dextroseVolumeBase),
 
         sodiumDose: formatLabelContentDisplay(sodiumDosePerDay),
-        sodiumVolume: formatLabelContentDisplay(
-            calculateSodiumVolumeMl(sodiumDosePerDay),
-        ),
+        sodiumVolume: overfill(sodiumVolumeBase),
 
         potassiumDose: formatLabelContentDisplay(potassiumDosePerDay),
-        potassiumVolume: formatLabelContentDisplay(
-            calculatePotassiumVolumeMl(potassiumDosePerDay),
-        ),
+        potassiumVolume: overfill(potassiumVolumeBase),
 
         magnesiumDose: formatLabelContentDisplay(magnesiumDosePerDay),
-        magnesiumVolume: formatLabelContentDisplay(
-            calculateMagnesiumVolumeMl(magnesiumDosePerDay),
-        ),
+        magnesiumVolume: overfill(magnesiumVolumeBase),
 
         calciumDose: formatLabelContentDisplay(calciumDosePerDay),
-        calciumVolume: formatLabelContentDisplay(
-            calculateCalciumVolumeMl(calciumDosePerDay),
-        ),
+        calciumVolume: overfill(calciumVolumeBase),
 
         traceElementDose: labelValue(traceElementDosePerDay),
-        traceElementVolume: labelValue(traceElementDosePerDay),
+        traceElementVolume: overfill(traceElementVolumeBase),
 
         multivitaminsDose: formatLabelContentDisplay(multivitaminsDosePerDay),
-        multivitaminsVolume: formatLabelContentDisplay(multivitaminsDosePerDay),
+        multivitaminsVolume: overfill(multivitaminsVolumeBase),
 
-        heparinDose: formatLabelContentDisplay(heparinDose),
-        heparinVolume: formatLabelContentDisplay(order?.heparin_ml),
+        heparinDose: heparinDose > 0 ? heparinDose.toFixed(1) : '-',
+        heparinVolume: heparinMl > 0 ? heparinMl.toFixed(2) : '-',
 
-        sterileWaterVolume: formatSterileWaterDisplay(sterileWaterVolume),
-        totalVolume: formatLabelContentDisplay(order?.total_fluid_ml),
+        totalVolume:
+            netBagOverfillVol > 0 ? netBagOverfillVol.toFixed(1) : '-',
 
         rate:
             order?.total_fluid_ml && order?.duration_hours
@@ -291,6 +277,7 @@ function tpnLabelFromOrder(order?: TpnOrder | null): TpnLabelData {
         lipidText: order?.lipid_concentration
             ? `Lipids ${order.lipid_concentration}%`
             : 'Lipids 20%',
+        lipidVolume: formatLabelContentDisplay(lipidVolumeMl),
         preparedBy: '',
         dutyText: 'Pharmacist on Duty',
         cautionText: 'Light sensitive, Cover with carbon',
@@ -1028,7 +1015,6 @@ function TpnPrintableLabel({ data }: { data: TpnLabelData }) {
         ['Trace Element', data.traceElementDose, 'mL', data.traceElementVolume, 'mL'],
         ['MVS', data.multivitaminsDose, 'mL', data.multivitaminsVolume, 'mL'],
         ['Heparin', data.heparinDose, 'units', data.heparinVolume, 'mL'],
-        ['qs ad water', '', 'mL', data.sterileWaterVolume, 'mL'],
     ];
 
     return (
@@ -1105,7 +1091,7 @@ function TpnPrintableLabel({ data }: { data: TpnLabelData }) {
                 <div className="value-line">{formatDateForPrint(data.expiresOn)}</div>
 
                 <div className="lipid-label">{data.lipidText}</div>
-                <div className="value-line"></div>
+                <div className="value-line">{data.lipidVolume}</div>
                 <div className="unit-cell">mL</div>
             </div>
 

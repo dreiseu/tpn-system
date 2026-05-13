@@ -31,10 +31,11 @@ export type TpnOrderFormData = {
 
     birth_weight_kg: string;
     current_weight_kg: string;
-    height_cm: string;
     diagnosis: string;
 
+    total_fluid_req_ml_kg_day: string;
     total_fluid_ml: string;
+    total_fluid_with_overfill_ml: string;
     duration_hours: string;
     route: string;
 
@@ -58,7 +59,6 @@ export type TpnOrderFormData = {
     multivitamins_ml_day: string;
     heparin_ml: string;
     heparin_iu_per_ml: string;
-    sterile_water_level_ml_day: string;
 
     use_osmolarity_calculator: boolean;
 
@@ -121,10 +121,11 @@ export const initialOrderFormData: TpnOrderFormData = {
 
     birth_weight_kg: '',
     current_weight_kg: '',
-    height_cm: '',
     diagnosis: '',
 
+    total_fluid_req_ml_kg_day: '',
     total_fluid_ml: '',
+    total_fluid_with_overfill_ml: '',
     duration_hours: '24',
     route: '',
 
@@ -133,10 +134,10 @@ export const initialOrderFormData: TpnOrderFormData = {
     dextrose_percent: '',
 
     lipid_g_per_kg_day: '',
-    lipid_concentration: '10',
+    lipid_concentration: '20',
     lipid_duration_hours: '24',
     lipid_piggyback: false,
-    lipid_separate_line: false,
+    lipid_separate_line: true,
 
     sodium_meq_kg_day: '',
     potassium_meq_kg_day: '',
@@ -148,7 +149,6 @@ export const initialOrderFormData: TpnOrderFormData = {
     multivitamins_ml_day: '',
     heparin_ml: '',
     heparin_iu_per_ml: '',
-    sterile_water_level_ml_day: '',
 
     use_osmolarity_calculator: false,
 
@@ -255,7 +255,7 @@ export const osmolarityLockTotalVolumeOptions: OsmolarityOption[] = [
 ];
 
 export const osmolarityDextroseConcentrationOptions: OsmolarityOption[] = [
-    { label: 'Dextrose 10%', value: '6' },
+    { label: 'Dextrose 6%', value: '6' },
     { label: 'Dextrose 10%', value: '10' },
     { label: 'Dextrose 20%', value: '20' },
     { label: 'Dextrose 30%', value: '30' },
@@ -430,46 +430,7 @@ export function resolveWeightForComputation(
     birthWeightKg: string,
     currentWeightKg: string,
 ): string {
-    const birthWeight = Number(birthWeightKg);
-    const currentWeight = Number(currentWeightKg);
-
-    const hasBirthWeight = Number.isFinite(birthWeight) && birthWeight > 0;
-    const hasCurrentWeight =
-        Number.isFinite(currentWeight) && currentWeight > 0;
-
-    if (hasBirthWeight && hasCurrentWeight) {
-        return currentWeight > birthWeight
-            ? currentWeight.toString()
-            : birthWeight.toString();
-    }
-
-    if (hasCurrentWeight) {
-        return currentWeight.toString();
-    }
-
-    if (hasBirthWeight) {
-        return birthWeight.toString();
-    }
-
-    return '';
-}
-
-export function calculateBmi(heightCm: string, weightKg: string): string {
-    const height = Number(heightCm);
-    const weight = Number(weightKg);
-
-    if (
-        !Number.isFinite(height) ||
-        !Number.isFinite(weight) ||
-        height <= 0 ||
-        weight <= 0
-    ) {
-        return '';
-    }
-
-    const heightMeters = height / 100;
-
-    return (weight / (heightMeters * heightMeters)).toFixed(2);
+    return birthWeightKg;
 }
 
 export function calculateInfusionRate(

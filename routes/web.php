@@ -34,6 +34,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('orders/{order}', [TpnOrderController::class, 'destroy'])
         ->name('orders.destroy');
 
+    Route::patch('orders/{order}/status', [TpnOrderController::class, 'updateStatus'])
+        ->name('orders.update-status');
+
     Route::get('orders/{order}', [TpnOrderController::class, 'show'])
         ->name('orders.show');
 

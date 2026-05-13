@@ -34,10 +34,11 @@ class TpnOrder extends Model
 
         'birth_weight_kg',
         'current_weight_kg',
-        'height_cm',
         'diagnosis',
 
+        'total_fluid_req_ml_kg_day',
         'total_fluid_ml',
+        'total_fluid_with_overfill_ml',
         'duration_hours',
         'route',
 
@@ -53,11 +54,12 @@ class TpnOrder extends Model
 
         'date_of_birth' => 'date:Y-m-d',
 
-        'birth_weight_kg' => 'decimal:2',
-        'current_weight_kg' => 'decimal:2',
-        'height_cm' => 'decimal:2',
+        'birth_weight_kg' => 'decimal:3',
+        'current_weight_kg' => 'decimal:3',
 
+        'total_fluid_req_ml_kg_day' => 'decimal:2',
         'total_fluid_ml' => 'decimal:2',
+        'total_fluid_with_overfill_ml' => 'decimal:2',
         'duration_hours' => 'decimal:2',
 
         'date_created' => 'datetime',

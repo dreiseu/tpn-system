@@ -1,6 +1,6 @@
 import { Head, Link } from '@inertiajs/react';
 import { Beaker, ClipboardCheck, PackageCheck, Plus, UsersRound } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { OrderRegistrationDialog } from '@/components/orders/order-registration-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,28 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
-import { getPatientName, type TpnOrder } from '@/types/orders';
+import { Input } from '@/components/ui/input';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { getPatientName, getStatusClass, type TpnOrder } from '@/types/orders';
+import { router } from '@inertiajs/react';
+import { Check, ChevronRight, Lock, Search, Filter } from 'lucide-react';
+import ConfirmationDialog from '@/components/ui/confirmation-dialog';
+import {
+    Pagination,
+    PaginationContent,
+    PaginationEllipsis,
+    PaginationItem,
+    PaginationLink,
+    PaginationNext,
+    PaginationPrevious,
+} from '@/components/ui/pagination';
+import { useEffect } from 'react';
 
 type DashboardProps = {
     stats?: {
@@ -62,6 +83,38 @@ export default function Dashboard({
     recentOrders = [],
 }: DashboardProps) {
     const [orderDialogOpen, setOrderDialogOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [statusFilter, setStatusFilter] = useState('All');
+    const [currentPage, setCurrentPage] = useState(1);
+    const ITEMS_PER_PAGE = 10;
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, statusFilter]);
+
+    const filteredOrders = useMemo(() => {
+        const query = searchQuery.toLowerCase().trim();
+        return recentOrders.filter((order) => {
+            const matchesSearch =
+                query === '' ||
+                order.order_no.toLowerCase().includes(query) ||
+                getPatientName(order).toLowerCase().includes(query) ||
+                (order.hospital_number || '').toLowerCase().includes(query);
+
+            const matchesStatus =
+                statusFilter === 'All' || order.status === statusFilter;
+
+            return matchesSearch && matchesStatus;
+        });
+    }, [recentOrders, searchQuery, statusFilter]);
+
+    const totalPages = Math.max(1, Math.ceil(filteredOrders.length / ITEMS_PER_PAGE));
+    const paginatedOrders = filteredOrders.slice(
+        (currentPage - 1) * ITEMS_PER_PAGE,
+        currentPage * ITEMS_PER_PAGE,
+    );
+
+    const emptyRows = Math.max(0, ITEMS_PER_PAGE - paginatedOrders.length);
 
     return (
         <>
@@ -121,38 +174,67 @@ export default function Dashboard({
                 </div>
 
                 <Card className="rounded-2xl border-slate-200 bg-white shadow-sm">
-                    <CardHeader className="flex flex-row items-center justify-between border-b border-slate-200 pb-5">
+                    <CardHeader className="flex flex-col gap-4 border-b border-slate-200 pb-5 md:flex-row md:items-center md:justify-between">
                         <div>
-                            <CardTitle className="pb-2 text-slate-900">
+                            <CardTitle className="pb-1 text-slate-900">
                                 Recent TPN Orders
                             </CardTitle>
                             <CardDescription className="text-slate-500">
                                 Latest digitized TPN order forms.
                             </CardDescription>
                         </div>
-                        <Badge
-                            variant="outline"
-                            className="border-slate-300 bg-white text-slate-700"
-                        >
-                            {recentOrders.length} visible
-                        </Badge>
+
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                            <div className="relative">
+                                <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                <Input
+                                    value={searchQuery}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+                                    placeholder="Search order, patient..."
+                                    className="h-9 w-full pl-9 sm:w-64"
+                                />
+                            </div>
+
+                            <Select value={statusFilter} onValueChange={setStatusFilter}>
+                                <SelectTrigger className="h-9 w-full sm:w-44">
+                                    <Filter className="mr-2 h-4 w-4 text-slate-400" />
+                                    <SelectValue placeholder="Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="All">All Statuses</SelectItem>
+                                    <SelectItem value="Pending Review">Pending Review</SelectItem>
+                                    <SelectItem value="For Dispensing">For Dispensing</SelectItem>
+                                    <SelectItem value="Completed">Completed</SelectItem>
+                                    <SelectItem value="Cancelled">Cancelled</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            <Badge
+                                variant="outline"
+                                className="h-7 border-slate-300 bg-white text-slate-700"
+                            >
+                                {filteredOrders.length} shown
+                            </Badge>
+                        </div>
                     </CardHeader>
                     <CardContent className="emr-scrollbar overflow-x-auto">
                         <div className="min-w-[820px]">
-                            <div className="grid grid-cols-[1.2fr_1.8fr_1.2fr_0.8fr_1fr_1.2fr] gap-4 border-b border-slate-200 pt-3 pb-3 text-xs font-semibold tracking-[0.12em] text-slate-500 uppercase">
+                            <div className="grid grid-cols-[1fr_1.5fr_1fr_0.6fr_0.8fr_1fr_1fr_1fr] gap-4 border-b border-slate-200 pt-3 pb-3 text-xs font-semibold tracking-[0.12em] text-slate-500 uppercase">
                                 <span>Order No.</span>
                                 <span>Patient</span>
                                 <span>Hospital No.</span>
                                 <span>Weight</span>
                                 <span>Ward</span>
+                                <span>Status</span>
                                 <span>Order Date</span>
+                                <span className="text-center">Actions</span>
                             </div>
-                            <div className="divide-y divide-slate-200">
-                                {recentOrders.length > 0 ? (
-                                    recentOrders.map((order) => (
+                             <div className="divide-y divide-slate-200">
+                                {paginatedOrders.length > 0 ? (
+                                    paginatedOrders.map((order: TpnOrder) => (
                                         <div
                                             key={order.id}
-                                            className="grid grid-cols-[1.2fr_1.8fr_1.2fr_0.8fr_1fr_1.2fr] gap-4 py-4 text-sm"
+                                            className="grid h-[64px] grid-cols-[1fr_1.5fr_1fr_0.6fr_0.8fr_1fr_1fr_1fr] items-center gap-4 py-3 text-sm"
                                         >
                                             <span className="font-medium text-slate-900">
                                                 <Link
@@ -162,7 +244,7 @@ export default function Dashboard({
                                                     {order.order_no}
                                                 </Link>
                                             </span>
-                                            <span className="font-medium text-slate-900">
+                                            <span className="truncate font-medium text-slate-900">
                                                 {getPatientName(order) || 'N/A'}
                                             </span>
                                             <span className="text-slate-700">
@@ -176,18 +258,104 @@ export default function Dashboard({
                                             <span className="text-slate-700">
                                                 {order.ward || 'N/A'}
                                             </span>
-                                            <span className="text-slate-700">
+                                            <span>
+                                                <Badge
+                                                    variant="outline"
+                                                    className={`font-semibold ${getStatusClass(order.status as any)}`}
+                                                >
+                                                    {order.status}
+                                                </Badge>
+                                            </span>
+                                            <span className="text-xs text-slate-500">
                                                 {order.order_date || 'N/A'}
                                             </span>
+                                            <div className="flex justify-center gap-2">
+                                                <StatusAction order={order} />
+                                            </div>
                                         </div>
                                     ))
                                 ) : (
-                                    <div className="py-8 text-sm text-slate-500">
-                                        No TPN orders have been recorded yet.
+                                    <div className="flex h-[640px] items-center justify-center text-sm text-slate-500">
+                                        No TPN orders match your search or filter.
                                     </div>
                                 )}
+
+                                {paginatedOrders.length > 0 && Array.from({ length: emptyRows }).map((_, i) => (
+                                    <div
+                                        key={`empty-${i}`}
+                                        className="grid h-[64px] grid-cols-[1fr_1.5fr_1fr_0.6fr_0.8fr_1fr_1fr_1fr] items-center gap-4"
+                                    />
+                                ))}
                             </div>
                         </div>
+
+                        {filteredOrders.length > ITEMS_PER_PAGE && (
+                            <div className="mt-6 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="text-sm text-slate-500">
+                                    Showing{' '}
+                                    <span className="font-medium">
+                                        {(currentPage - 1) * ITEMS_PER_PAGE + 1}
+                                    </span>{' '}
+                                    to{' '}
+                                    <span className="font-medium">
+                                        {Math.min(currentPage * ITEMS_PER_PAGE, filteredOrders.length)}
+                                    </span>{' '}
+                                    of <span className="font-medium">{filteredOrders.length}</span> orders
+                                </div>
+
+                                <Pagination className="mx-0 w-auto justify-end">
+                                    <PaginationContent>
+                                        <PaginationItem>
+                                            <PaginationPrevious
+                                                href="#"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (currentPage > 1) setCurrentPage(currentPage - 1);
+                                                }}
+                                                className={currentPage === 1 ? 'pointer-events-none opacity-50' : ''}
+                                            />
+                                        </PaginationItem>
+
+                                        {Array.from({ length: totalPages }).map((_, i) => {
+                                            const page = i + 1;
+                                            // Simple pagination for brevity
+                                            if (totalPages > 5 && Math.abs(page - currentPage) > 1 && page !== 1 && page !== totalPages) {
+                                                if (page === 2 || page === totalPages - 1) {
+                                                    return <PaginationItem key={page}><PaginationEllipsis /></PaginationItem>;
+                                                }
+                                                return null;
+                                            }
+
+                                            return (
+                                                <PaginationItem key={page}>
+                                                    <PaginationLink
+                                                        href="#"
+                                                        isActive={page === currentPage}
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            setCurrentPage(page);
+                                                        }}
+                                                    >
+                                                        {page}
+                                                    </PaginationLink>
+                                                </PaginationItem>
+                                            );
+                                        })}
+
+                                        <PaginationItem>
+                                            <PaginationNext
+                                                href="#"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+                                                }}
+                                                className={currentPage === totalPages ? 'pointer-events-none opacity-50' : ''}
+                                            />
+                                        </PaginationItem>
+                                    </PaginationContent>
+                                </Pagination>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
             </div>
@@ -195,6 +363,98 @@ export default function Dashboard({
             <OrderRegistrationDialog
                 open={orderDialogOpen}
                 onOpenChange={setOrderDialogOpen}
+            />
+        </>
+    );
+}
+
+function StatusAction({ order }: { order: TpnOrder }) {
+    const [processing, setProcessing] = useState(false);
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [targetStatus, setTargetStatus] = useState<string | null>(null);
+
+    const updateStatus = (newStatus: string) => {
+        setTargetStatus(newStatus);
+        setConfirmOpen(true);
+    };
+
+    const handleConfirm = () => {
+        if (!targetStatus || processing) return;
+
+        setProcessing(true);
+        router.patch(route('orders.update-status', order.id), {
+            status: targetStatus,
+        }, {
+            onFinish: () => {
+                setProcessing(false);
+                setConfirmOpen(false);
+                setTargetStatus(null);
+            },
+        });
+    };
+
+    const getConfirmConfig = () => {
+        if (targetStatus === 'For Dispensing') {
+            return {
+                title: 'Mark for Dispensing?',
+                description: `This will move order ${order.order_no} to the dispensing queue.`,
+                confirmLabel: 'Mark for Dispensing',
+            };
+        }
+        if (targetStatus === 'Completed') {
+            return {
+                title: 'Complete Order?',
+                description: `This will mark order ${order.order_no} as completed and lock it for further changes.`,
+                confirmLabel: 'Complete Order',
+            };
+        }
+        return { title: 'Are you sure?', confirmLabel: 'Proceed' };
+    };
+
+    const config = getConfirmConfig();
+
+    return (
+        <>
+            {order.status === 'Pending Review' && (
+                <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 px-2 text-xs border-amber-200 text-amber-700 hover:bg-amber-50 cursor-pointer"
+                    disabled={processing}
+                    onClick={() => updateStatus('For Dispensing')}
+                >
+                    <ChevronRight className="mr-1 h-3 w-3" />
+                    Dispense
+                </Button>
+            )}
+
+            {order.status === 'For Dispensing' && (
+                <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 px-2 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50 cursor-pointer"
+                    disabled={processing}
+                    onClick={() => updateStatus('Completed')}
+                >
+                    <Check className="mr-1 h-3 w-3" />
+                    Complete
+                </Button>
+            )}
+
+            {order.status === 'Completed' && (
+                <div className="flex items-center text-xs font-medium text-slate-400">
+                    <Lock className="mr-1 h-3 w-3" />
+                    Closed
+                </div>
+            )}
+
+            <ConfirmationDialog
+                open={confirmOpen}
+                onOpenChange={setConfirmOpen}
+                onConfirm={handleConfirm}
+                title={config.title}
+                description={config.description}
+                confirmLabel={config.confirmLabel}
             />
         </>
     );

@@ -15,7 +15,11 @@ export function useTabSessionEnd() {
             isSpaNavigating.current = true;
         });
         const removeFinish = router.on('finish', () => {
-            isSpaNavigating.current = false;
+            // Add a small delay to prevent race conditions with page redirects/reloads
+            // which might trigger pagehide after finish
+            setTimeout(() => {
+                isSpaNavigating.current = false;
+            }, 100);
         });
 
         const handlePageHide = () => {
