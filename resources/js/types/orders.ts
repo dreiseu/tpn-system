@@ -192,32 +192,32 @@ export const orderTabs: Array<{
     label: string;
     description: string;
 }> = [
-    {
-        key: 'patient',
-        label: 'Patient Information',
-        description: 'Patient identity and location',
-    },
-    {
-        key: 'clinical',
-        label: 'Clinical Details',
-        description: 'Weight, height, BMI, and notes',
-    },
-    {
-        key: 'requirements',
-        label: 'TPN Requirements',
-        description: 'Fluid, duration, rate, and route',
-    },
-    {
-        key: 'computation',
-        label: 'Computation',
-        description: 'Formula and calculated components',
-    },
-    {
-        key: 'review',
-        label: 'Review',
-        description: 'Final verification',
-    },
-];
+        {
+            key: 'patient',
+            label: 'Patient Information',
+            description: 'Patient identity and location',
+        },
+        {
+            key: 'clinical',
+            label: 'Clinical Details',
+            description: 'Weight, height, BMI, and notes',
+        },
+        {
+            key: 'requirements',
+            label: 'TPN Requirements',
+            description: 'Fluid, duration, rate, and route',
+        },
+        {
+            key: 'computation',
+            label: 'Computation',
+            description: 'Formula and calculated components',
+        },
+        {
+            key: 'review',
+            label: 'Review',
+            description: 'Final verification',
+        },
+    ];
 
 export const statusOptions: Array<TpnOrderStatus | 'All'> = [
     'All',
@@ -255,7 +255,7 @@ export const osmolarityLockTotalVolumeOptions: OsmolarityOption[] = [
 ];
 
 export const osmolarityDextroseConcentrationOptions: OsmolarityOption[] = [
-    { label: 'Dextrose 10%', value: '6' }, 
+    { label: 'Dextrose 10%', value: '6' },
     { label: 'Dextrose 10%', value: '10' },
     { label: 'Dextrose 20%', value: '20' },
     { label: 'Dextrose 30%', value: '30' },
@@ -676,7 +676,7 @@ export function calculatePotassiumVolumeMl(potassiumMeqPerDay: string): string {
 }
 
 export function calculateCalciumVolumeMl(calciumMeqPerDay: string): string {
-    return calculateVolumeByStockConcentration(calciumMeqPerDay, '0.5');
+    return calculateVolumeByStockConcentration(calciumMeqPerDay, '100');
 }
 
 export function calculateMagnesiumVolumeMl(magnesiumMeqPerDay: string): string {

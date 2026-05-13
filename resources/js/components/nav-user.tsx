@@ -49,8 +49,8 @@ export function NavUser({
                     variant="ghost"
                     className={
                         variant === 'global'
-                            ? 'h-14 min-w-[320px] justify-end gap-3 rounded-xl bg-transparent px-3 text-white hover:bg-white/6 data-[state=open]:bg-white/6'
-                            : 'h-11 min-w-[240px] justify-start gap-2 rounded-xl border border-border/70 px-3 text-foreground hover:bg-muted data-[state=open]:bg-muted'
+                            ? 'h-14 min-w-[320px] justify-end gap-3 rounded-xl bg-transparent px-3 text-white hover:bg-white/6 data-[state=open]:bg-white/6 cursor-pointer'
+                            : 'h-11 min-w-[240px] justify-start gap-2 rounded-xl border border-border/70 px-3 text-foreground hover:bg-muted data-[state=open]:bg-muted cursor-pointer'
                     }
                     data-test={
                         variant === 'global'
@@ -102,7 +102,7 @@ export function NavUser({
                     <DropdownMenuTrigger asChild>
                         <SidebarMenuButton
                             size="lg"
-                            className="group h-12 rounded-xl border border-sidebar-border/70 bg-sidebar-accent/40 text-sidebar-foreground hover:bg-sidebar-accent data-[state=open]:bg-sidebar-accent"
+                            className="group h-12 rounded-xl border border-sidebar-border/70 bg-sidebar-accent/40 text-sidebar-foreground hover:bg-sidebar-accent data-[state=open]:bg-sidebar-accent cursor-pointer"
                             data-test="sidebar-menu-button"
                         >
                             <UserInfo user={auth.user} />
