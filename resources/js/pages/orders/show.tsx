@@ -429,7 +429,7 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                 label="Rate"
                                 value={withUnit(infusionRate, 'mL/hr')}
                             />
-                             <InfoItem label="TPN Line" value={order.route} />
+                            <InfoItem label="TPN Line" value={order.route} />
                         </InfoGrid>
                     </CardContent>
                 </Card>
@@ -606,7 +606,7 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                                 sodiumVolumeMl,
                                             ) || '—'
                                             } mL`
-                                            : ''
+                                            : '-'
                                     }
                                 />
                                 <InfoItem
@@ -620,7 +620,7 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                                 potassiumVolumeMl,
                                             ) || '—'
                                             } mL`
-                                            : ''
+                                            : '-'
                                     }
                                 />
                                 <InfoItem
@@ -634,7 +634,7 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                                 calciumVolumeMl,
                                             ) || '—'
                                             } mL`
-                                            : ''
+                                            : '-'
                                     }
                                 />
                                 <InfoItem
@@ -648,7 +648,7 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                                 magnesiumVolumeMl,
                                             ) || '—'
                                             } mL`
-                                            : ''
+                                            : '-'
                                     }
                                 />
                                 <InfoItem
@@ -663,7 +663,7 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                                 phosphorusVolumeMl,
                                             ) || '—'
                                             } mL`
-                                            : ''
+                                            : '-'
                                     }
                                 />
                                 <InfoItem
@@ -676,7 +676,7 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                                 traceElementsVolumeMl,
                                             ) || '—'
                                             } mL`
-                                            : ''
+                                            : '-'
                                     }
                                 />
                                 <InfoItem
@@ -691,35 +691,15 @@ export default function OrderShow({ order }: { order?: TpnOrder | null }) {
                                                 multivitaminsVolumeMl,
                                             ) || '—'
                                             } mL`
-                                            : ''
+                                            : '-'
                                     }
                                 />
                                 <InfoItem
                                     label="Heparin"
                                     value={
-                                        order.heparin_ml || heparinTotalIu
-                                            ? `${formatContentDisplay(
-                                                order.heparin_ml,
-                                            ) || '—'
-                                            } mL / ${formatContentDisplay(
-                                                heparinTotalIu,
-                                            ) || '—'
-                                            } I.U.`
-                                            : ''
-                                    }
-                                />
-                                <InfoItem
-                                    label="QS / Sterile Water"
-                                    value={
-                                        sterileWaterDisplay
-                                            ? `${sterileWaterDisplay} mL${String(
-                                                order.sterile_water_level_ml_day ??
-                                                '',
-                                            ).trim() !== ''
-                                                ? ''
-                                                : ' recommended'
-                                            }`
-                                            : ''
+                                        order.heparin_ml
+                                            ? `${formatContentDisplay(order.heparin_ml)}`
+                                            : '-'
                                     }
                                 />
                             </InfoGrid>

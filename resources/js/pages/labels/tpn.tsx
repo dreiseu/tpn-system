@@ -33,10 +33,12 @@ import {
 import {
     calculateCalciumContentPerDay,
     calculateCalciumVolumeMl,
+    calculateDextroseMix,
     calculateDextroseVolumeMl,
     calculateLipidVolumeMl,
     calculateMagnesiumVolumeMl,
     calculatePerKgPerDay,
+    calculatePhosphorusVolumeMl,
     calculatePotassiumVolumeMl,
     calculateProteinVolumeMl,
     calculateSodiumVolumeMl,
@@ -61,7 +63,8 @@ type TpnLabelData = {
     aminoAcidDose: string;
     aminoAcidVolume: string;
     dextrosePercent: string;
-    dextroseVolume: string;
+    dextrose50Volume: string;
+    dextrose5Volume: string;
     sodiumDose: string;
     sodiumVolume: string;
     potassiumDose: string;
@@ -182,11 +185,6 @@ function tpnLabelFromOrder(order?: TpnOrder | null): TpnLabelData {
     );
     const aminoAcidVolumeBase = calculateProteinVolumeMl(aminoAcidGrams);
 
-    const dextroseVolumeBase = calculateDextroseVolumeMl(
-        order?.total_fluid_ml ?? '',
-        order?.dextrose_percent ?? '',
-    );
-
     const sodiumDosePerDay = calculatePerKgPerDay(
         order?.sodium_meq_kg_day ?? '',
         weight,
@@ -217,9 +215,33 @@ function tpnLabelFromOrder(order?: TpnOrder | null): TpnLabelData {
     const multivitaminsDosePerDay = order?.multivitamins_ml_day || '';
     const multivitaminsVolumeBase = multivitaminsDosePerDay;
 
+    const phosphorusDosePerDay = calculatePerKgPerDay(
+        order?.phosphorus_mmol_kg_day ?? '',
+        weight,
+    );
+    const phosphorusVolumeBase = calculatePhosphorusVolumeMl(phosphorusDosePerDay);
+
     // Heparin: (Net Bag Overfill * 0.5) / 1000
     const heparinMl = (netBagOverfillVol * 0.5) / 1000;
     const heparinDose = heparinMl * 1000;
+
+    // Dextrose Mix Calculation
+    const otherAdditivesVol =
+        (Number(aminoAcidVolumeBase) || 0) +
+        (Number(sodiumVolumeBase) || 0) +
+        (Number(potassiumVolumeBase) || 0) +
+        (Number(calciumVolumeBase) || 0) +
+        (Number(magnesiumVolumeBase) || 0) +
+        (Number(phosphorusVolumeBase) || 0);
+
+    const bagVol = totalFluidMl - (Number(lipidVolumeMl) || 0);
+    const baseVol = Math.max(0, bagVol - otherAdditivesVol);
+
+    const dextroseMix = calculateDextroseMix(
+        bagVol,
+        baseVol,
+        Number(order?.dextrose_percent) || 0,
+    );
 
     const overfill = (vol: string | number) => {
         const n = Number(vol);
@@ -238,8 +260,9 @@ function tpnLabelFromOrder(order?: TpnOrder | null): TpnLabelData {
         aminoAcidDose: formatLabelContentDisplay(aminoAcidGrams),
         aminoAcidVolume: overfill(aminoAcidVolumeBase),
 
-        dextrosePercent: formatLabelContentDisplay(order?.dextrose_percent),
-        dextroseVolume: overfill(dextroseVolumeBase),
+         dextrosePercent: formatLabelContentDisplay(order?.dextrose_percent),
+        dextrose50Volume: overfill(dextroseMix.d50Ml),
+        dextrose5Volume: overfill(dextroseMix.d5Ml),
 
         sodiumDose: formatLabelContentDisplay(sodiumDosePerDay),
         sodiumVolume: overfill(sodiumVolumeBase),
@@ -1007,7 +1030,8 @@ function TpnPrintableLabel({ data }: { data: TpnLabelData }) {
 
     const rows = [
         ['Amino Acid', data.aminoAcidDose, 'g', data.aminoAcidVolume, 'mL'],
-        ['Dextrose', data.dextrosePercent, '%', data.dextroseVolume, 'mL'],
+        ['Dextrose 50%', data.dextrosePercent + '% Mix', '', data.dextrose50Volume, 'mL'],
+        ['Dextrose 5%', '', '', data.dextrose5Volume, 'mL'],
         ['Sodium', data.sodiumDose, 'meq/day', data.sodiumVolume, 'mL'],
         ['Potassium', data.potassiumDose, 'meq/day', data.potassiumVolume, 'mL'],
         ['Mag Sulfate', data.magnesiumDose, 'meq/day', data.magnesiumVolume, 'mL'],

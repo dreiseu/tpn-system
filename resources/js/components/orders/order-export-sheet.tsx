@@ -6,6 +6,7 @@ import {
     calculateCalciumVolumeMl,
     calculateDextroseCalories,
     calculateDextroseGramsPerDay,
+    calculateDextroseMix,
     calculateDextroseVolumeMl,
     calculateGir,
     calculateInfusionRate,
@@ -61,7 +62,7 @@ function formatHeparinDisplay(value: string | number | null | undefined): string
         return '';
     }
 
-    return numericValue.toFixed(3);
+    return numericValue.toFixed(2);
 }
 
 function formatQsCalculationValue(value: string | number | null | undefined): string {
@@ -273,7 +274,7 @@ export function OrderExportSheet({
         order.potassium_meq_kg_day,
         weightForComputation,
     );
-    const calciumMeqPerDay = calculateCalciumContentPerDay(
+    const calciumMgPerDay = calculateCalciumContentPerDay(
         order.calcium_mg_kg_day,
         weightForComputation,
     );
@@ -288,17 +289,34 @@ export function OrderExportSheet({
 
     const sodiumVolumeMl = calculateSodiumVolumeMl(sodiumMeqPerDay);
     const potassiumVolumeMl = calculatePotassiumVolumeMl(potassiumMeqPerDay);
-    const calciumVolumeMl = calculateCalciumVolumeMl(calciumMeqPerDay);
+    const calciumVolumeMl = calculateCalciumVolumeMl(calciumMgPerDay);
     const magnesiumVolumeMl = calculateMagnesiumVolumeMl(magnesiumMeqPerDay);
-    const phosphorusVolumeMl =
-        calculatePhosphorusVolumeMl(phosphorusMmolPerDay);
+    const phosphorusVolumeMl = calculatePhosphorusVolumeMl(phosphorusMmolPerDay);
 
-    const traceElementsVolumeMl = order.trace_elements_ml_kg_day || '';
-    const multivitaminsVolumeMl = order.multivitamins_ml_day || '';
-    const heparinVolumeMl = (order as any).heparin_ml || '';
+    const traceElementsVolumeMl = order.trace_elements_ml_kg_day;
+    const multivitaminsVolumeMl = order.multivitamins_ml_day;
 
-    const netBagOverfillVol =
-        (Number(order.total_fluid_ml || 0) - Number(lipidVolumeMl || 0)) * 1.5;
+    const totalFluidMl = Number(order.total_fluid_ml) || 0;
+    const lipidVol = Number(lipidVolumeMl) || 0;
+    const netBagVolume = totalFluidMl - lipidVol;
+
+
+    const otherAdditivesVol =
+        (Number(proteinVolumeMl) || 0) +
+        (Number(sodiumVolumeMl) || 0) +
+        (Number(potassiumVolumeMl) || 0) +
+        (Number(calciumVolumeMl) || 0) +
+        (Number(magnesiumVolumeMl) || 0) +
+        (Number(phosphorusVolumeMl) || 0);
+
+    const baseVol = Math.max(0, netBagVolume - otherAdditivesVol);
+    const dextroseMix = calculateDextroseMix(
+        netBagVolume,
+        baseVol,
+        Number(order.dextrose_percent) || 0,
+    );
+
+    const netBagOverfillVol = netBagVolume * 1.5;
 
     const totalNonProteinCaloriesPerKgDay =
         calculateTotalNonProteinCaloriesPerKgDay(
@@ -1038,48 +1056,69 @@ export function OrderExportSheet({
                                     />{' '}
                                     g/day
                                 </div>
+                                <div style={{ paddingLeft: '16px', marginTop: '4px', fontSize: '9px', fontStyle: 'italic' }}>
+                                    (Mix of D50 and D5 used for compounding)
+                                </div>
                             </td>
                             <td
                                 className="tpn-col-content"
                                 style={{
                                     verticalAlign: 'bottom',
-                                    paddingBottom: '16px',
+                                    paddingBottom: '8px',
                                 }}
                             >
-                                <BlankLine
-                                    width="45px"
-                                    text={dextroseGramsPerDay}
-                                />{' '}
-                                g/day
+                                <div style={{ marginBottom: '16px' }}>
+                                    <BlankLine
+                                        width="45px"
+                                        text={dextroseGramsPerDay}
+                                    />{' '}
+                                    g/day
+                                </div>
+                                <div style={{ fontSize: '9px', fontWeight: 'bold' }}>
+                                    D50:<br />
+                                    D5:
+                                </div>
                             </td>
                             <td
                                 className="tpn-col-vol"
                                 style={{
                                     verticalAlign: 'bottom',
-                                    paddingBottom: '16px',
+                                    paddingBottom: '8px',
                                 }}
                             >
-                                <BlankLine
-                                    width="45px"
-                                    text={formatContentDisplay(dextroseVolumeMl)}
-                                />{' '}
-                                mL
+                                <div style={{ marginBottom: '16px' }}>
+                                    <BlankLine
+                                        width="45px"
+                                        text={formatContentDisplay(dextroseMix.d50Ml + dextroseMix.d5Ml)}
+                                    />{' '}
+                                    mL
+                                </div>
+                                <div style={{ fontSize: '9px' }}>
+                                    <BlankLine width="45px" text={formatContentDisplay(dextroseMix.d50Ml)} /> mL<br />
+                                    <BlankLine width="45px" text={formatContentDisplay(dextroseMix.d5Ml)} /> mL
+                                </div>
                             </td>
                             <td
                                 className="tpn-col-req-vol"
                                 style={{
                                     verticalAlign: 'bottom',
-                                    paddingBottom: '16px',
+                                    paddingBottom: '8px',
                                     backgroundColor: '#f9fafb',
                                 }}
                             >
-                                <BlankLine
-                                    width="45px"
-                                    text={formatContentDisplay(
-                                        Number(dextroseVolumeMl) * 1.5,
-                                    )}
-                                />{' '}
-                                mL
+                                <div style={{ marginBottom: '16px' }}>
+                                    <BlankLine
+                                        width="45px"
+                                        text={formatContentDisplay(
+                                            (dextroseMix.d50Ml + dextroseMix.d5Ml) * 1.5,
+                                        )}
+                                    />{' '}
+                                    mL
+                                </div>
+                                <div style={{ fontSize: '9px' }}>
+                                    <BlankLine width="45px" text={formatContentDisplay(dextroseMix.d50Ml * 1.5)} /> mL<br />
+                                    <BlankLine width="45px" text={formatContentDisplay(dextroseMix.d5Ml * 1.5)} /> mL
+                                </div>
                             </td>
                         </tr>
 
@@ -1263,7 +1302,7 @@ export function OrderExportSheet({
                                 label: 'Calcium',
                                 formula: 'mg/kg/day ',
                                 unit: 'mg/day',
-                                val: calciumMeqPerDay,
+                                val: calciumMgPerDay,
                                 req: order.calcium_mg_kg_day,
                                 vol: calciumVolumeMl,
                             },
@@ -1420,19 +1459,7 @@ export function OrderExportSheet({
                                     width="30px"
                                     text={order.trace_elements_ml_kg_day}
                                 />{' '}
-                                mL/kg/day{' '}
-                                <span
-                                    style={{ fontSize: '14px', margin: '0 4px' }}
-                                >
-                                    X
-                                </span>{' '}
-                                <BlankLine
-                                    width="30px"
-                                    text={formatContentDisplay(
-                                        weightForComputation,
-                                    )}
-                                />{' '}
-                                kg
+                                mL/day{' '}
                             </td>
                             <td
                                 className="tpn-col-content"
@@ -1590,7 +1617,7 @@ export function OrderExportSheet({
                                             netBagOverfillVol,
                                         )}
                                     />{' '}
-                                    / 1000 IU/mL
+                                    mL / 1000 IU/mL
                                 </span>
                             </td>
                             <td

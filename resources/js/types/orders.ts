@@ -577,9 +577,42 @@ export function calculateDextroseVolumeMl(
         return '';
     }
 
+    // Traditional D50-only calculation (for backward compatibility or simple views)
     const factor = dextrose / 50;
-
     return formatVolumeNumber(totalFluid * factor);
+}
+
+/**
+ * Calculates the mix of D50 and D5 needed to reach a target dextrose percentage
+ * within a specific available volume.
+ *
+ * Formula:
+ * G_target = BagVolume * (Percent / 100)
+ * V_D50 * 0.5 + (BaseVolume - V_D50) * 0.05 = G_target
+ * 0.45 * V_D50 = G_target - 0.05 * BaseVolume
+ * V_D50 = (G_target - 0.05 * BaseVolume) / 0.45
+ */
+export function calculateDextroseMix(
+    bagVolumeMl: number,
+    baseVolumeForDextroseMl: number,
+    targetPercent: number,
+): { d50Ml: number; d5Ml: number } {
+    if (bagVolumeMl <= 0 || baseVolumeForDextroseMl <= 0 || targetPercent <= 0) {
+        return { d50Ml: 0, d5Ml: 0 };
+    }
+
+    const gTarget = bagVolumeMl * (targetPercent / 100);
+    const gFromBaseAsD5 = baseVolumeForDextroseMl * 0.05;
+
+    let d50Ml = (gTarget - gFromBaseAsD5) / 0.45;
+
+    // Clamp values
+    if (d50Ml < 0) d50Ml = 0;
+    if (d50Ml > baseVolumeForDextroseMl) d50Ml = baseVolumeForDextroseMl;
+
+    const d5Ml = Math.max(0, baseVolumeForDextroseMl - d50Ml);
+
+    return { d50Ml, d5Ml };
 }
 
 export function calculateLipidVolumeMl(

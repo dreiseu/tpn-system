@@ -35,6 +35,7 @@ import {
     calculateInfusionRate,
     calculateLipidCalories,
     calculateProteinVolumeMl,
+    calculateDextroseMix,
     calculateDextroseVolumeMl,
     calculateLipidVolumeMl,
     calculateLipidBottleVolumeMl,
@@ -251,6 +252,38 @@ export function OrderForm({
         return formatVolumeDisplay(data.multivitamins_ml_day);
     }, [data.multivitamins_ml_day]);
 
+    const dextroseMix = useMemo(() => {
+        const totalFluid = Number(data.total_fluid_ml) || 0;
+        const lipidVol = Number(lipidVolumeMl) || 0;
+        // The "bag" volume is total minus lipids (as they are separate or piggyback but usually not part of the base mix)
+        const bagVol = totalFluid - lipidVol;
+
+        const otherAdditivesVol =
+            (Number(proteinVolumeMl) || 0) +
+            (Number(sodiumVolumeMl) || 0) +
+            (Number(potassiumVolumeMl) || 0) +
+            (Number(calciumVolumeMl) || 0) +
+            (Number(magnesiumVolumeMl) || 0) +
+            (Number(phosphorusVolumeMl) || 0);
+
+        const baseVol = Math.max(0, bagVol - otherAdditivesVol);
+        return calculateDextroseMix(
+            bagVol,
+            baseVol,
+            Number(data.dextrose_percent) || 0,
+        );
+    }, [
+        data.total_fluid_ml,
+        data.dextrose_percent,
+        lipidVolumeMl,
+        proteinVolumeMl,
+        sodiumVolumeMl,
+        potassiumVolumeMl,
+        calciumVolumeMl,
+        magnesiumVolumeMl,
+        phosphorusVolumeMl,
+    ]);
+
     const netBagOverfillVol = useMemo(() => {
         const totalFluid = Number(data.total_fluid_ml) || 0;
         const lipidVol = Number(lipidVolumeMl) || 0;
@@ -292,7 +325,7 @@ export function OrderForm({
 
     useEffect(() => {
         const totalIu = Number(heparinTotalIu) || 0;
-        const computedMl = (totalIu / 1000).toFixed(3);
+        const computedMl = (totalIu / 1000).toFixed(2);
         const fixedIuPerMl = '1000';
 
         if (
@@ -655,6 +688,7 @@ export function OrderForm({
                 multivitaminsVolumeMl={multivitaminsVolumeMl}
                 heparinTotalIu={heparinTotalIu}
                 netBagOverfillVol={netBagOverfillVol}
+                dextroseMix={dextroseMix}
                 updateField={updateField}
             />
         ),
@@ -696,6 +730,7 @@ export function OrderForm({
                 multivitaminsVolumeMl={multivitaminsVolumeMl}
                 heparinTotalIu={heparinTotalIu}
                 netBagOverfillVol={netBagOverfillVol}
+                dextroseMix={dextroseMix}
             />
         ),
     };
@@ -919,6 +954,7 @@ type ComputationSectionProps = SectionProps & {
     multivitaminsVolumeMl: string;
     heparinTotalIu: string;
     netBagOverfillVol: number;
+    dextroseMix: { d50Ml: number; d5Ml: number };
 };
 
 type ReviewSectionProps = {
@@ -956,6 +992,7 @@ type ReviewSectionProps = {
     multivitaminsVolumeMl: string;
     heparinTotalIu: string;
     netBagOverfillVol: number;
+    dextroseMix: { d50Ml: number; d5Ml: number };
 };
 
 function formatVolumeDisplay(value: string): string {
@@ -1665,6 +1702,7 @@ function ComputationSection({
     multivitaminsVolumeMl,
     heparinTotalIu,
     netBagOverfillVol,
+    dextroseMix,
 }: ComputationSectionProps) {
     return (
         <div className="space-y-4">
@@ -1736,11 +1774,18 @@ function ComputationSection({
                                     value={dextroseGramsPerDay}
                                     unit="g/day"
                                 />
-                                <ComputationLine
-                                    label="Volume"
-                                    value={dextroseVolumeMl}
-                                    unit="mL"
-                                />
+                                <div className="space-y-1">
+                                    <ComputationLine
+                                        label="D50 Volume"
+                                        value={dextroseMix.d50Ml.toFixed(1)}
+                                        unit="mL"
+                                    />
+                                    <ComputationLine
+                                        label="D5 Volume"
+                                        value={dextroseMix.d5Ml.toFixed(1)}
+                                        unit="mL"
+                                    />
+                                </div>
                             </div>
                         </MacronutrientCard>
 
@@ -1969,7 +2014,7 @@ function ComputationSection({
                                         }
                                     />
                                     <span className="text-sm text-muted-foreground">
-                                        mL/kg/day
+                                        mL/day
                                     </span>
                                 </div>
                             }
@@ -2330,6 +2375,7 @@ function ReviewSection({
     multivitaminsVolumeMl,
     heparinTotalIu,
     netBagOverfillVol,
+    dextroseMix,
 }: ReviewSectionProps) {
     const patientName = getPatientName(data);
 
@@ -2498,14 +2544,16 @@ function ReviewSection({
                                         : ''
                                 }
                             />
-                            <ReviewRow
-                                label="Volume"
-                                value={
-                                    dextroseVolumeMl
-                                        ? `${dextroseVolumeMl} mL`
-                                        : ''
-                                }
-                            />
+                            <div className="space-y-1 pl-4 pt-1 border-l-2 border-slate-100 ml-1">
+                                <ReviewRow
+                                    label="D50 Volume"
+                                    value={dextroseMix.d50Ml ? `${dextroseMix.d50Ml.toFixed(1)} mL` : '-'}
+                                />
+                                <ReviewRow
+                                    label="D5 Volume"
+                                    value={dextroseMix.d5Ml ? `${dextroseMix.d5Ml.toFixed(1)} mL` : '-'}
+                                />
+                            </div>
                         </div>
 
                         <div className="grid gap-3 rounded-lg border border-border/70 bg-background p-4">
